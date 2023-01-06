@@ -1,0 +1,11 @@
+.DS_Store
+data/
+.idea/
+nlgeval/pycocoevalcap/bleu/__pycache__
+nlgeval/pycocoevalcap/cider/__pycache__
+nlgeval/pycocoevalcap/meteor/__pycache__
+nlgeval/pycocoevalcap/rouge/__pycache__
+nlgeval/__pycache__
+evals/__pycache__
+sources/kgmoe/__pycache__
+trainers/__pycache__
