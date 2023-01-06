@@ -161,7 +161,7 @@ if __name__ == "__main__":
     for TYPE in ['train', 'val', 'test']:
         src = read_csv(SRC_FILE.format(TYPE))
         tgt = read_csv(TGT_FILE.format(TYPE))
-        grounding_sentences(src, tgt, TYPE, DATA_PATH)
+        grounding_sentences(src, tgt, TYPE, DATA_PATH) # find concepts in both COMVE dataset and in ConceptNet.
 
         src = read_csv(SRC_FILE.format(TYPE))
         tgt = read_csv(TGT_FILE.format(TYPE))
