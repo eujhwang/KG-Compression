@@ -2,6 +2,7 @@ import logging
 import os, sys
 import json
 import torch
+import wandb
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -93,7 +94,8 @@ class DataTrainingArguments:
     # For KGMoE methods
     pows: Optional[float] = field(default=6.5, metadata={"help": "specify a token as expert token"})
     loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
-    
+    use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
+
 def main():
 
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, Seq2SeqTrainingArguments))
@@ -152,6 +154,13 @@ def main():
         bool(training_args.local_rank != -1), training_args.fp16,
     )
 
+    if data_args.use_wandb:
+        wandb.init(project="mokge", entity="ejhwang-ubc")
+        wandb.config.update(model_args)
+        wandb.config.update(data_args)
+        wandb.config.update(training_args)
+        logging.info("wandb.config: %s" % (wandb.config))
+
     set_seed(training_args.seed)
 
     config = BartConfig.from_pretrained(
@@ -184,6 +193,8 @@ def main():
         config=config,
         cache_dir=model_args.cache_dir,
     )
+    if data_args.use_wandb:
+        wandb.watch(model)
 
     use_task_specific_params(model, data_args.task)
 

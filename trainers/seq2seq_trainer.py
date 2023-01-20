@@ -1,8 +1,11 @@
 import json
 import os
+import time
 import warnings
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import wandb
 from tqdm.auto import tqdm, trange
 
 import numpy as np
@@ -270,12 +273,14 @@ class Seq2SeqTrainer(Trainer):
                 train_dataloader.sampler.set_epoch(epoch)
 
             epoch_iterator = train_dataloader
+            epoch_start_time = time.time()
 
             # Reset the past mems state at the beginning of each epoch if necessary.
             if self.args.past_index >= 0:
                 self._past = None
 
             epoch_pbar = tqdm(epoch_iterator, desc="Iteration", disable=disable_tqdm)
+            losses = []
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training
@@ -283,8 +288,9 @@ class Seq2SeqTrainer(Trainer):
                     steps_trained_in_current_epoch -= 1
                     epoch_pbar.update(1)
                     continue
-
-                tr_loss += self.training_step(model, inputs)
+                loss = self.training_step(model, inputs)
+                losses.append(loss.item())
+                tr_loss += loss
                 self.total_flos += self.floating_point_ops(inputs)
 
                 if (step + 1) % self.args.gradient_accumulation_steps == 0 or (
@@ -314,6 +320,9 @@ class Seq2SeqTrainer(Trainer):
                 epoch_pbar.update(1)
                 if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                     break
+            if self.data_args.use_wandb:
+                wandb.log({"[Train] Epoch": epoch, "[Train] Loss": sum(losses) / len(losses),
+                           "[Train] Elapsed Time:": (time.time() - epoch_start_time)}, commit=False)
             epoch_pbar.close()
             train_pbar.update(1)
             
@@ -340,6 +349,8 @@ class Seq2SeqTrainer(Trainer):
                 with open(out_pred_metric, 'w') as metric_out:
                     json.dump(metrics, metric_out, indent=1)
 
+                if self.data_args.use_wandb:
+                    wandb.log(metrics, commit=False)
                 # ''' save the model '''
                 if metrics[self.args.metric_for_best_model] > self.best_metric:
                     self.best_metric = metrics[self.args.metric_for_best_model]
@@ -347,7 +358,8 @@ class Seq2SeqTrainer(Trainer):
 
             if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                 break
-
+        if self.data_args.use_wandb:
+            wandb.log({})
         train_pbar.close()
         if self.tb_writer:
             self.tb_writer.close()

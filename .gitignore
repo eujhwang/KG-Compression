@@ -9,3 +9,4 @@ nlgeval/__pycache__
 evals/__pycache__
 sources/kgmoe/__pycache__
 trainers/__pycache__
+wandb/
