@@ -345,7 +345,7 @@ class Seq2SeqTrainer(Trainer):
                 if not os.path.exists(val_ref_path):
                     val_ref_path += '.txt'
                 metrics.update(eval_accuracy_diversity(out_pred_path, val_ref_path, self.args.eval_beams))
-
+                logging.info("[Eval] metrics: %s" % (metrics))
                 with open(out_pred_metric, 'w') as metric_out:
                     json.dump(metrics, metric_out, indent=1)
 
