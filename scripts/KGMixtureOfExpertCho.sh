@@ -30,6 +30,7 @@ option="
     --load_best_model_at_end 
     --overwrite_output_dir 
     --evaluate_during_training
+    --use_wandb
 "
 
 cmd="python3 main.py ${option}"
