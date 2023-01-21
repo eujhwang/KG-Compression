@@ -2,9 +2,9 @@
 #### Run experiment
 ########################
 
-DATASET=${}
-INPUT_DIR=${}
-OUTPUT_DIR=${}
+DATASET=eg
+INPUT_DIR=data
+OUTPUT_DIR=output
 
 option="
     --data_dir ${INPUT_DIR}/${DATASET}
