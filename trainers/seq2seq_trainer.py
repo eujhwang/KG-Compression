@@ -355,7 +355,7 @@ class Seq2SeqTrainer(Trainer):
                 if metrics[self.args.metric_for_best_model] > self.best_metric:
                     self.best_metric = metrics[self.args.metric_for_best_model]
                     self._save_training(model, trial, metrics=metrics)
-
+                    logging.info("[Best-Eval] best metrics: %s" % (self.best_metric))
             if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                 break
         # if self.data_args.use_wandb:
