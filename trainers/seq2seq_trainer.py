@@ -322,7 +322,7 @@ class Seq2SeqTrainer(Trainer):
                     break
             if self.data_args.use_wandb:
                 wandb.log({"[Train] Epoch": epoch, "[Train] Loss": sum(losses) / len(losses),
-                           "[Train] Elapsed Time:": (time.time() - epoch_start_time)}, commit=False)
+                           "[Train] Elapsed Time:": (time.time() - epoch_start_time)})
             epoch_pbar.close()
             train_pbar.update(1)
             
@@ -350,7 +350,7 @@ class Seq2SeqTrainer(Trainer):
                     json.dump(metrics, metric_out, indent=1)
 
                 if self.data_args.use_wandb:
-                    wandb.log(metrics, commit=False)
+                    wandb.log(metrics)
                 # ''' save the model '''
                 if metrics[self.args.metric_for_best_model] > self.best_metric:
                     self.best_metric = metrics[self.args.metric_for_best_model]
@@ -358,8 +358,8 @@ class Seq2SeqTrainer(Trainer):
 
             if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                 break
-        if self.data_args.use_wandb:
-            wandb.log({})
+        # if self.data_args.use_wandb:
+        #     wandb.log({})
         train_pbar.close()
         if self.tb_writer:
             self.tb_writer.close()
