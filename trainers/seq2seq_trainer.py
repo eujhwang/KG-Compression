@@ -321,7 +321,7 @@ class Seq2SeqTrainer(Trainer):
                 if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                     break
             if self.data_args.use_wandb:
-                wandb.log({"[Train] Epoch": epoch, "[Train] Loss": sum(losses) / len(losses),
+                wandb.log({"[Train] Epoch": epoch+1, "[Train] Loss": sum(losses) / len(losses),
                            "[Train] Elapsed Time:": (time.time() - epoch_start_time)})
             epoch_pbar.close()
             train_pbar.update(1)
