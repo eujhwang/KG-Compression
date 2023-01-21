@@ -1,6 +1,14 @@
 import torch
 import torch.nn as nn
+from torch.nn import Parameter, Linear
 from torch_scatter import scatter_max, scatter_mean, scatter_add
+import torch.nn.functional as F
+
+from trainers.kgtrainer_utils import sinkhorn_loss_default
+
+
+# from torch_geometric.nn import DenseGCNConv
+# from torch_geometric.nn.dense.linear import Linear
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2):
@@ -23,25 +31,107 @@ class GraphEncoder(nn.Module):
         self.W_r = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
         self.gate_linear = nn.Linear(embed_size, 1)
 
-    def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
+        # self.gcn_att = DenseGCNConv(embed_size, 1, bias=True)
+        out_dim = 1
+        self.lin = Linear(embed_size, out_dim, bias=False)
+        self.bias = Parameter(torch.Tensor(out_dim))
+        self.reset_parameters()
+            
+    def reset_parameters(self):
+        self.lin.reset_parameters()
+
+    def normalize_batch_adj(self, adj):  # adj shape: batch_size * num_node * num_node, D^{-1/2} (A+I) D^{-1/2}
+        dim = adj.size()[1]
+        A = adj + torch.eye(dim, device=adj.device)
+        deg_inv_sqrt = A.sum(dim=-1).clamp(min=1).pow(-0.5)
+
+        newA = deg_inv_sqrt.unsqueeze(-1) * A * deg_inv_sqrt.unsqueeze(-2)
+        newA = (adj.sum(-1)>0).float().unsqueeze(-1).to(adj.device) * newA
+        return newA
+
+    def coarsen_graph(self, concept_hidden, relation_hidden, head, tail, triple_label, adj):
+        bsz = head.size(0)  # batch_size 4
+        # mem_t = head.size(1)  # max_triple_len 600
+        mem = concept_hidden.size(1)  # max_concept_length 300
+        # hidden_size = concept_hidden.size(2)  # concept hidden size 768
+
+        # concept_hidden (b, n, d) (180, 300, 768) adj (b, n, n)
+        x = concept_hidden
+
+        # Parameterization of S part
+        out = self.lin(x) # X.W_a
+        norm_adj = self.normalize_batch_adj(adj)
+        # deg_inv_sqrt = adj.sum(dim=-1).clamp(min=1).pow(-0.5)
+        # adj = deg_inv_sqrt.unsqueeze(-1) * adj * deg_inv_sqrt.unsqueeze(-2)
+        out = torch.matmul(norm_adj, out)
+        out = out + self.bias
+
+        # not sure why torch.pow 2
+        alpha_vec = F.sigmoid(torch.pow(out, 2)).squeeze()
+        # alpha_vec = F.sigmoid(out).squeeze()
+        batch_num_nodes = []
+        for i in range(bsz):
+            batch_num_nodes.append(len(set(head[i, :].tolist())))
+        batch_num_nodes = torch.tensor(batch_num_nodes)
+
+        cut_batch_num_nodes = batch_num_nodes
+        cut_value = torch.zeros_like(alpha_vec[:, 0])
+        assign_ratio = 0.1
+        for i in range(bsz):
+            if cut_batch_num_nodes[i] > 1:
+                cut_batch_num_nodes[i] = torch.ceil(cut_batch_num_nodes[i].float() * assign_ratio) + 1
+                temptopk, topk_ind = alpha_vec[i].topk(cut_batch_num_nodes[i], dim=-1)
+                cut_value[i] = temptopk[-1]
+            else:
+                cut_value[i] = 0
+
+        cut_alpha_vec = F.relu(alpha_vec+0.0000001 - torch.unsqueeze(cut_value, -1))
+        S = torch.mul(norm_adj, cut_alpha_vec.unsqueeze(1))  # repeat rows of cut_alpha_vec, #b * n * n
+        S = F.normalize(S, p=1, dim=-1)
+
+        embedding_tensor = torch.matmul(torch.transpose(S, 1, 2), x)  # equals to torch.einsum('bij,bjk->bik',...)
+        new_adj = torch.matmul(torch.matmul(torch.transpose(S, 1, 2), adj), S)  # batched matrix multiply
+
+        new_head = torch.zeros(head.shape, dtype=torch.long, device=head.device)
+        new_tail = torch.zeros(tail.shape, dtype=torch.long, device=tail.device)
+        # heads, tails = [], []
+        # print()
+        for i in range(bsz):
+            head = new_adj[i].nonzero()[:, 0]
+            tail = new_adj[i].nonzero()[:, 1]
+            new_head[i, :len(head)] = head
+            new_tail[i, :len(tail)] = tail
+            # print("new_head:", new_head.shape, new_head)
+            # print("new_tail:", new_tail.shape, new_tail)
+            # assert False
+        #     heads.append(head)
+        #     tails.append(tail)
+        # head = torch.stack(heads, dim=0)
+        # tail = torch.stack(tails, dim=0)
+        # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
+        return embedding_tensor, new_adj, S, new_head, new_tail
+
+    def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2, adj=None):
         for i in range(layer_number):
-            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
+            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i, adj)
         return concept_hidden, relation_hidden
 
-    def comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx):
+    def comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx, adj):
         '''
         concept_hidden: bsz x mem x hidden
         relation_hidden: bsz x mem_t x hidden
         '''
-        bsz = head.size(0)
-        mem_t = head.size(1)
-        mem = concept_hidden.size(1)
-        hidden_size = concept_hidden.size(2)
+        bsz = head.size(0)      # batch_size 4
+        mem_t = head.size(1)    # max_triple_len 600
+        mem = concept_hidden.size(1) # max_concept_length 300
+        hidden_size = concept_hidden.size(2) # concept hidden size 768
+        # concept_hidden (180, 300, 768)
+        update_node = torch.zeros_like(concept_hidden).to(concept_hidden.device).float() # [4, 300, 768]
 
-        update_node = torch.zeros_like(concept_hidden).to(concept_hidden.device).float()
-        count = torch.ones_like(head).to(head.device).masked_fill_(triple_label == -1, 0).float()
-        count_out = torch.zeros(bsz, mem).to(head.device).float()
+        count = torch.ones_like(head).to(head.device).masked_fill_(triple_label == -1, 0).float() # [4, 600]
+        count_out = torch.zeros(bsz, mem).to(head.device).float() # [4, 300]
 
+        # head [4, 600], tail [4, 600]
         o = concept_hidden.gather(1, head.unsqueeze(2).expand(bsz, mem_t, hidden_size))
         o = o.masked_fill(triple_label.unsqueeze(2) == -1, 0)
 
@@ -141,7 +231,14 @@ class GraphEncoder(nn.Module):
         # bsz x L x mem
         return total_concept_prob
 
-    def forward(self, concept_ids, distance, head, tail, relation, triple_label, mixture_ids=None):
+    def get_nonzero_rows(self, M):# M is a matrix
+        # row_ind = M.sum(-1).nonzero().squeeze() #nonzero has bugs in Pytorch 1.2.0.........
+        #So we use other methods to take place of it
+        MM, MM_ind = M.sum(-1).sort()
+        N = (M.sum(-1)>0).sum()
+        return M[MM_ind[:N]]
+
+    def forward(self, concept_ids, distance, head, tail, relation, triple_label, mixture_ids=None, adj=None):
         
         memory = self.embed_word(concept_ids)
         rel_repr = self.relation_embed(relation)
@@ -150,12 +247,28 @@ class GraphEncoder(nn.Module):
             mixture_embed = self.mixture_embed(mixture_ids)
             memory = memory + 1.0 * mixture_embed
 
-        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        # coarse_x = memory
+        # for i in range(1):
+        #     coarse_x, adj, S, head, tail = self.coarsen_graph(coarse_x, rel_repr, head, tail, triple_label, adj)
+
+        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number, adj=adj)
         head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
         tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
-        
+
         # bsz x mem_triple x hidden
         triple_repr = torch.cat((head_repr, rel_repr, tail_repr), dim=-1)
+
+        opt_loss = 0.0
+        # epsilon = 0.01
+        # opt_epochs = 100
+        # for i in range(len(memory)):
+        #     mem = self.get_nonzero_rows(memory[i])
+        #     new_mem = self.get_nonzero_rows(node_repr[i])
+        #     # print("mem:", mem.shape, "new_mem:", new_mem.shape)
+        #     if mem.shape[0] == 0: continue
+        #     if new_mem.shape[0] == 0: continue
+        #     loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs).float()
+        #     opt_loss += loss
 
         return node_repr, triple_repr
 

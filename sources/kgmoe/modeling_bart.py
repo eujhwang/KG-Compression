@@ -103,6 +103,7 @@ class BartMoEModel(PretrainedBartModel):
         relation_ids=None,
         triple_labels=None,
         graph_outputs=None,
+        adj=None,
         **kwargs,
     ):
         if "decoder_past_key_values" in kwargs:
@@ -149,6 +150,7 @@ class BartMoEModel(PretrainedBartModel):
                 relation=relation_ids, 
                 triple_label=triple_labels,
                 mixture_ids=kg_mixture_ids,
+                adj=adj,
             )
         # If the user passed a tuple for encoder_outputs, we wrap it in a BaseModelOuput when return_dict=False
         elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
@@ -350,6 +352,8 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
         tail_ids=None,
         relation_ids=None,
         triple_labels=None,
+        # eunjeong
+        adj=None,
         **unused,
     ):
         if "lm_labels" in unused:
@@ -388,7 +392,8 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
             head_ids=head_ids,
             tail_ids=tail_ids,
             relation_ids=relation_ids,
-            triple_labels=triple_labels,      
+            triple_labels=triple_labels,
+            adj=adj,
         )
         lm_logits = F.linear(lm_outputs[0], self.model.shared.weight, bias=self.final_logits_bias)
 

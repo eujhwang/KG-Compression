@@ -8,6 +8,7 @@ from pathlib import Path
 from random import sample
 from typing import Callable, Dict, Iterable, List, Union
 
+import networkx as nx
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -237,7 +238,22 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         head_ids = self.head_ids[index]
         tail_ids = self.tail_ids[index]
         triple_labels = self.triple_labels[index]
-        relations = [x[0] for x in relations]
+
+        # FIXME: we should address all relations, not just taking random one relation out of all relations
+        relations = [x[0] for x in relations] # taking only one relation out of many relations
+        # concept: 202 cpt_label: 202 dist: 202 relations: 608 head_ids: 608 tail_ids: 608 triple_labels: 608 relations: 608
+        # print("concept:", len(concept), "cpt_label:", len(cpt_label), "dist:", len(dist), "relations:", len(relations),
+        #       "head_ids:", len(head_ids), "tail_ids:", len(tail_ids), "triple_labels:", len(triple_labels), "relations:", len(relations))
+        # print()
+
+        # create a graph
+        # graph = nx.MultiDiGraph()
+        # for head, tail, rels in zip(head_ids, tail_ids, relations):
+        #     for rel in rels:
+        #         graph.add_edge(head, tail, rel=rel, weight=1)
+        # A = nx.adjacency_matrix(graph)
+
+        # print("head_max:", max(head_ids), "tail_max", max(tail_ids))
 
         _concept = concept.copy()
         _cpt_label = cpt_label.copy()
@@ -265,6 +281,16 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
 
         _head_ids, _tail_ids, _relation_ids, _triple_labels = self.encode_triples(
             _head_ids, _tail_ids, _relations, _triple_labels, max_triple_len)
+        # new - eunjeong
+        graph = nx.MultiDiGraph()
+        for head, tail, rel in zip(_head_ids, _tail_ids, _relation_ids):
+            graph.add_edge(head.item(), tail.item(), rel=rel.item(), weight=1)
+            # if head.item() == 0:
+                # print("head:", head.item(), "tail:", tail.item(), "rel:", rel.item())
+        A = nx.adjacency_matrix(graph)
+        A = torch.tensor(A.todense(), device=_concept_ids.device, dtype=torch.float)
+        _A = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
+        _A[:A.shape[0], :A.shape[1]] = A
 
         return {
             "input_ids": source_ids,
@@ -279,6 +305,7 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
             "tail_ids": _tail_ids,
             "relation_ids": _relation_ids,
             "triple_labels": _triple_labels,
+            "adj": _A,
         }
 
     def encode_line(self, tokenizer, line, max_length, pad_to_max_length=True, return_tensors="pt"):
@@ -400,6 +427,7 @@ class Seq2SeqDataCollator:
         relation_ids = torch.stack([x["relation_ids"] for x in batch])
         triple_labels = torch.stack([x["triple_labels"] for x in batch])
         labels = trim_batch(labels, self.pad_token_id)
+        adj = torch.stack([x["adj"] for x in batch])
 
         oracle_concept_ids = None
         if batch[0]["oracle_concept_ids"] is not None:
@@ -427,6 +455,7 @@ class Seq2SeqDataCollator:
             "tail_ids": tail_ids,
             "relation_ids": relation_ids,
             "triple_labels": triple_labels,
+            "adj": adj,
         }
 
         return batch
@@ -641,3 +670,99 @@ def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield lst[i : i + n]
+
+
+def cost_matrix(x, y, p=2):
+    "Returns the matrix of $|x_i-y_j|^p$."
+    x_col = x.unsqueeze(1)
+    y_lin = y.unsqueeze(0)
+    #    x_col = x.unsqueeze(1)
+    #    y_lin = y.unsqueeze(0)
+    c = torch.sum((torch.abs(x_col - y_lin)) ** p, 2)
+    return c
+
+def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalanced=False, gpu=False):
+    """
+    Given two emprical measures with n points each with locations x and y
+    outputs an approximation of the OT cost with regularization parameter epsilon
+    niter is the max. number of steps in sinkhorn loop
+
+    INPUTS:
+        x : positions of diracs for the first distribution, torch.FloatTensor of size [n, d]
+        y : positions of diracs for the second distribution, torch.FloatTensor of size [m, d]
+        epsilon : importance of the entropic regularization
+        mu : mass located at each dirac, torch.FloatTensor of size [n]
+        nu : mass located at each dirac, torch.FloatTensor of size [m]
+        n : total number of diracs of the first distribution
+        m : total number of diracs of the second distribution
+        niter : maximum number of Sinkhorn iterations
+        acc : required accuracy to satisfy convergence
+        unbalanced : specify if unbalanced OT needs to be solved
+        gpu : specify usage of CUDA with pytorch
+
+    OUTPUTs:
+        cost : the cost of moving from distribution x to y
+    """
+    # The Sinkhorn algorithm takes as input three variables :
+    # C = Variable(cost_matrix(x, y, p=p), requires_grad=True)  # Wasserstein cost function
+    C= cost_matrix(x, y, p=p)
+
+    # use GPU if asked to
+    # if (gpu & torch.cuda.is_available()):
+    #     C = C.cuda()
+    #     mu = nu.cuda()
+    #     nu = nu.cuda()
+
+    # Parameters of the Sinkhorn algorithm.
+    tau = -.8  # nesterov-like acceleration
+    thresh = acc  # stopping criterion
+    if (unbalanced):
+        rho = 1(.5) ** 2  # unbalanced transport
+        lam = rho / (rho + epsilon)  # Update exponent
+
+    # Elementary operations .....................................................................
+    def ave(u, u1):
+        "Barycenter subroutine, used by kinetic acceleration through extrapolation."
+        return tau * u + (1 - tau) * u1
+
+    def M(u, v):
+        "Modified cost for logarithmic updates"
+        "$M_{ij} = (-c_{ij} + u_i + v_j) / \epsilon$"
+        return (-C + u.repeat(m, 1).transpose(0, 1) + v.repeat(n, 1)) / epsilon
+
+    def lse(A):
+        "log-sum-exp"
+        return torch.log(torch.exp(A).sum(1, keepdim=True) + 1e-6)  # add 10^-6 to prevent NaN
+
+    # Actual Sinkhorn loop ......................................................................
+    u, v, err = torch.zeros_like(mu), torch.zeros_like(nu), 0.
+    u.requires_grad = True
+    v.requires_grad = True
+    actual_nits = 0  # to check if algorithm terminates because of threshold or max iterations reached
+
+    for i in range(niter):
+        u1 = u  # useful to check the update
+        if (unbalanced):
+            # accelerated unbalanced iterations
+            u = ave(u, lam * (epsilon * (torch.log(mu) - lse(M(u, v)).squeeze()) + u))
+            v = ave(v, lam * (epsilon * (torch.log(nu) - lse(M(u, v).t()).squeeze()) + v))
+        else:
+            u = epsilon * (torch.log(mu) - lse(M(u, v)).squeeze()) + u
+            v = epsilon * (torch.log(nu) - lse(M(u, v).t()).squeeze()) + v
+        err = (u - u1).abs().sum()
+
+        actual_nits += 1
+        if (err < thresh).data.numpy():
+            break
+    U, V = u, v
+    pi = torch.exp(M(U, V))  # Transport plan pi = diag(a)*K*diag(b)
+    cost = torch.sum(pi * C)  # Sinkhorn cost
+
+    return cost
+
+def sinkhorn_loss_default(x, y, epsilon=0.01, p=2, niter=100, gpu=True):
+    n = x.shape[0]
+    m = y.shape[0]
+    mu = torch.ones(n)/n
+    nu = torch.ones(m)/m
+    return sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p, niter=niter, gpu=gpu)
