@@ -780,6 +780,6 @@ def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalan
 def sinkhorn_loss_default(x, y, epsilon=0.01, p=2, niter=100, device='cuda'):
     n = x.shape[0]
     m = y.shape[0]
-    mu = torch.ones(n)/n
-    nu = torch.ones(m)/m
+    mu = torch.ones(n).to(device)/n
+    nu = torch.ones(m).to(device)/m
     return sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p, niter=niter, device=device)
