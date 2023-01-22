@@ -186,8 +186,7 @@ class BartMoEModel(PretrainedBartModel):
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
         )
-
-        return output_dict, None
+        return output_dict, None, None
 
     def get_input_embeddings(self):
         return self.shared
@@ -371,55 +370,32 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
             use_cache = False
             if decoder_input_ids is None:
                 decoder_input_ids = shift_tokens_right(lm_labels, self.config.pad_token_id)
+
         # decoder_outputs + encoder_outputs, concept_outputs
-        if self.model.training:
-            lm_outputs, kg_outputs, kg_hidden = self.model(
-                input_ids,
-                lm_mixture_ids=lm_mixture_ids,
-                attention_mask=attention_mask,
-                decoder_input_ids=decoder_input_ids,
-                encoder_outputs=encoder_outputs,
-                decoder_attention_mask=decoder_attention_mask,
-                past_key_values=past_key_values,
-                use_cache=use_cache,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-                # KG Inputs!
-                concept_ids=concept_ids,
-                kg_mixture_ids=kg_mixture_ids,
-                concept_distances=concept_distances,
-                concept_labels=concept_labels,
-                head_ids=head_ids,
-                tail_ids=tail_ids,
-                relation_ids=relation_ids,
-                triple_labels=triple_labels,
-                adj=adj,
-            )
-        else:
-            lm_outputs, kg_outputs = self.model(
-                input_ids,
-                lm_mixture_ids=lm_mixture_ids,
-                attention_mask=attention_mask,
-                decoder_input_ids=decoder_input_ids,
-                encoder_outputs=encoder_outputs,
-                decoder_attention_mask=decoder_attention_mask,
-                past_key_values=past_key_values,
-                use_cache=use_cache,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-                # KG Inputs!
-                concept_ids=concept_ids,
-                kg_mixture_ids=kg_mixture_ids,
-                concept_distances=concept_distances,
-                concept_labels=concept_labels,
-                head_ids=head_ids,
-                tail_ids=tail_ids,
-                relation_ids=relation_ids,
-                triple_labels=triple_labels,
-                adj=adj,
-            )
+        lm_outputs, kg_outputs, kg_hidden = self.model(
+            input_ids,
+            lm_mixture_ids=lm_mixture_ids,
+            attention_mask=attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            encoder_outputs=encoder_outputs,
+            decoder_attention_mask=decoder_attention_mask,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            # KG Inputs!
+            concept_ids=concept_ids,
+            kg_mixture_ids=kg_mixture_ids,
+            concept_distances=concept_distances,
+            concept_labels=concept_labels,
+            head_ids=head_ids,
+            tail_ids=tail_ids,
+            relation_ids=relation_ids,
+            triple_labels=triple_labels,
+            adj=adj,
+        )
+
         lm_logits = F.linear(lm_outputs[0], self.model.shared.weight, bias=self.final_logits_bias)
 
         masked_lm_loss = None

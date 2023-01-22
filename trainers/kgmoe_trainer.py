@@ -244,7 +244,6 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                 generated_tokens = self._pad_tensors_to_max_len(generated_tokens, self.max_gen_length)
 
             lm_labels = inputs.get("labels")
-
             lm_outputs, _, _, _ = model(**inputs, use_cache=False)
             loss = self._compute_loss(lm_outputs[0], lm_labels)
             loss = loss.mean().item()
