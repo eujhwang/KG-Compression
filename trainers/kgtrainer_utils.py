@@ -752,7 +752,7 @@ def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalan
         return torch.log(torch.exp(A).sum(1, keepdim=True) + 1e-6)  # add 10^-6 to prevent NaN
 
     # Actual Sinkhorn loop ......................................................................
-    u, v, err = torch.zeros_like(mu), torch.zeros_like(nu), 0.
+    u, v, err = torch.zeros_like(mu).to(x.device), torch.zeros_like(nu).to(x.device), 0.
     u.requires_grad = True
     v.requires_grad = True
     actual_nits = 0  # to check if algorithm terminates because of threshold or max iterations reached
