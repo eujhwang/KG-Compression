@@ -135,7 +135,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden)
+        opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
@@ -184,7 +184,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         
         return node_loss
 
-    def _compute_opt_loss(self, node_output, node_hidden):
+    def _compute_opt_loss(self, node_output, node_hidden, device):
         # print(node_output.shape, node_hidden.shape)
         opt_loss = 0.0
         epsilon = 1.0
@@ -194,7 +194,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             new_mem = self.get_nonzero_rows(node_hidden[i])
             if mem.shape[0] == 0: continue
             if new_mem.shape[0] == 0: continue
-            loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs).float()
+            loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
             opt_loss += loss
         return opt_loss
 

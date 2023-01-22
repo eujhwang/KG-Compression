@@ -698,7 +698,7 @@ def cost_matrix(x, y, p=2):
     c = torch.sum((torch.abs(x_col - y_lin)) ** p, 2)
     return c
 
-def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalanced=False, gpu=False):
+def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalanced=False, device='cuda'):
     """
     Given two emprical measures with n points each with locations x and y
     outputs an approximation of the OT cost with regularization parameter epsilon
@@ -752,7 +752,7 @@ def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalan
         return torch.log(torch.exp(A).sum(1, keepdim=True) + 1e-6)  # add 10^-6 to prevent NaN
 
     # Actual Sinkhorn loop ......................................................................
-    u, v, err = torch.zeros_like(mu).to(mu.device), torch.zeros_like(nu).to(nu.device), 0.
+    u, v, err = torch.zeros_like(mu).to(device), torch.zeros_like(nu).to(device), 0.
     u.requires_grad = True
     v.requires_grad = True
     actual_nits = 0  # to check if algorithm terminates because of threshold or max iterations reached
@@ -777,9 +777,9 @@ def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalan
 
     return cost
 
-def sinkhorn_loss_default(x, y, epsilon=0.01, p=2, niter=100, gpu=True):
+def sinkhorn_loss_default(x, y, epsilon=0.01, p=2, niter=100, device='cuda'):
     n = x.shape[0]
     m = y.shape[0]
     mu = torch.ones(n)/n
     nu = torch.ones(m)/m
-    return sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p, niter=niter, gpu=gpu)
+    return sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p, niter=niter, device=device)
