@@ -725,10 +725,10 @@ def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalan
     C= cost_matrix(x, y, p=p)
 
     # use GPU if asked to
-    # if (gpu & torch.cuda.is_available()):
-    #     C = C.cuda()
-    #     mu = nu.cuda()
-    #     nu = nu.cuda()
+    if torch.cuda.is_available():
+        C = C.cuda()
+        mu = mu.cuda()
+        nu = nu.cuda()
 
     # Parameters of the Sinkhorn algorithm.
     tau = -.8  # nesterov-like acceleration
