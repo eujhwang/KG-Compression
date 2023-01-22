@@ -281,16 +281,33 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
 
         _head_ids, _tail_ids, _relation_ids, _triple_labels = self.encode_triples(
             _head_ids, _tail_ids, _relations, _triple_labels, max_triple_len)
+        # print("_head_ids:", _head_ids)
+        # print("_tail_ids:", _tail_ids)
+
         # new - eunjeong
-        graph = nx.MultiDiGraph()
+        # graph = nx.DiGraph()
+        adj = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
         for head, tail, rel in zip(_head_ids, _tail_ids, _relation_ids):
-            graph.add_edge(head.item(), tail.item(), rel=rel.item(), weight=1)
+            # print("head", head.item(), "tail", tail.item(), "rel", rel.item())
+            src = head.item()
+            dst = tail.item()
+            if adj[src, dst] == 0:
+                adj[src, dst] = 1
+            else:
+                adj[src, dst] += 1
+            # graph.add_edge(head.item(), tail.item(), rel=rel.item(), weight=1)
             # if head.item() == 0:
                 # print("head:", head.item(), "tail:", tail.item(), "rel:", rel.item())
-        A = nx.adjacency_matrix(graph)
-        A = torch.tensor(A.todense(), device=_concept_ids.device, dtype=torch.float)
-        _A = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
-        _A[:A.shape[0], :A.shape[1]] = A
+            # break
+        # print(graph.nodes())
+        # assert False
+        # A = nx.to_numpy_matrix(graph)
+        # print("A:", adj.shape, adj)
+        # print("A.nonzero():", adj.nonzero().tolist())
+        # assert False
+        # A = torch.tensor(A.todense(), device=_concept_ids.device, dtype=torch.float)
+        # _A = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
+        # _A[:A.shape[0], :A.shape[1]] = A
 
         return {
             "input_ids": source_ids,
@@ -305,7 +322,7 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
             "tail_ids": _tail_ids,
             "relation_ids": _relation_ids,
             "triple_labels": _triple_labels,
-            "adj": _A,
+            "adj": adj,
         }
 
     def encode_line(self, tokenizer, line, max_length, pad_to_max_length=True, return_tensors="pt"):

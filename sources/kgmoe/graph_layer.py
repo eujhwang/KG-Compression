@@ -49,7 +49,7 @@ class GraphEncoder(nn.Module):
         newA = (adj.sum(-1)>0).float().unsqueeze(-1).to(adj.device) * newA
         return newA
 
-    def coarsen_graph(self, concept_hidden, relation_hidden, head, tail, triple_label, adj):
+    def coarsen_graph(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, adj):
         bsz = head.size(0)  # batch_size 4
         # mem_t = head.size(1)  # max_triple_len 600
         mem = concept_hidden.size(1)  # max_concept_length 300
@@ -76,7 +76,7 @@ class GraphEncoder(nn.Module):
 
         cut_batch_num_nodes = batch_num_nodes
         cut_value = torch.zeros_like(alpha_vec[:, 0])
-        assign_ratio = 0.1
+        assign_ratio = 0.3
         for i in range(bsz):
             if cut_batch_num_nodes[i] > 1:
                 cut_batch_num_nodes[i] = torch.ceil(cut_batch_num_nodes[i].float() * assign_ratio) + 1
@@ -92,31 +92,32 @@ class GraphEncoder(nn.Module):
         embedding_tensor = torch.matmul(torch.transpose(S, 1, 2), x)  # equals to torch.einsum('bij,bjk->bik',...)
         new_adj = torch.matmul(torch.matmul(torch.transpose(S, 1, 2), adj), S)  # batched matrix multiply
 
-        new_head = torch.zeros(head.shape, dtype=torch.long, device=head.device)
-        new_tail = torch.zeros(tail.shape, dtype=torch.long, device=tail.device)
-        # heads, tails = [], []
-        # print()
-        for i in range(bsz):
-            head = new_adj[i].nonzero()[:, 0]
-            tail = new_adj[i].nonzero()[:, 1]
-            new_head[i, :len(head)] = head
-            new_tail[i, :len(tail)] = tail
-            # print("new_head:", new_head.shape, new_head)
-            # print("new_tail:", new_tail.shape, new_tail)
-            # assert False
-        #     heads.append(head)
-        #     tails.append(tail)
-        # head = torch.stack(heads, dim=0)
-        # tail = torch.stack(tails, dim=0)
-        # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
-        return embedding_tensor, new_adj, S, new_head, new_tail
+        # # print("new_adj[i].nonzero()[:, 0]:", new_adj[i].nonzero()[:, 0].shape, new_adj[i].nonzero()[:, 0].tolist())
+        # # print("new_adj[i].nonzero()[:, 1]:", new_adj[i].nonzero()[:, 1].shape, new_adj[i].nonzero()[:, 1].tolist())
+        # # assert False
+        #
+        # new_heads = []
+        # new_tails = []
+        # for i in range(bsz):
+        #     head = new_adj[i].nonzero()[:, 0]
+        #     tail = new_adj[i].nonzero()[:, 1]
+        #     print("head:", head.shape, head.tolist())
+        #     print("tail:", tail.shape, tail.tolist())
+        #     assert False
+        #     new_heads.append(head)
+        #     new_tails.append(tail)
+        #
 
-    def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2, adj=None):
+
+        # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
+        return embedding_tensor, new_adj
+
+    def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
-            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i, adj)
+            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
         return concept_hidden, relation_hidden
 
-    def comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx, adj):
+    def comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx):
         '''
         concept_hidden: bsz x mem x hidden
         relation_hidden: bsz x mem_t x hidden
@@ -150,6 +151,67 @@ class GraphEncoder(nn.Module):
         update_node = act(update_node)
 
         return update_node, self.W_r[layer_idx](relation_hidden)
+
+    def multi_layer_gcn2(self, concept_hidden, relation_hidden, adj, triple_label, layer_number=2):
+        for i in range(layer_number):
+            concept_hidden = self.gcn2(concept_hidden, relation_hidden, adj, triple_label, i)
+        return concept_hidden
+
+    def gcn2(self, concept_hidden, relation_hidden, adj, triple_label, layer_idx):
+        '''
+        concept_hidden: bsz x mem x hidden
+        relation_hidden: bsz x mem_t x hidden
+        '''
+        # print("adj:", adj.shape, adj)
+        bsz = adj.size(0)      # batch_size 4
+        # mem_t = head.size(1)    # max_triple_len 600
+        mem = concept_hidden.size(1) # max_concept_length 300
+        hidden_size = concept_hidden.size(2) # concept hidden size 768
+        # concept_hidden (180, 300, 768)
+        update_node = torch.zeros_like(concept_hidden).to(concept_hidden.device).float() # [4, 300, 768]
+        count_out = torch.zeros(bsz, mem).to(adj.device).float()
+
+        for i in range(bsz):
+            head = adj[i].nonzero()[:, 0]
+            tail = adj[i].nonzero()[:, 1]
+
+            count = torch.ones_like(head).to(head.device).float()
+
+            o = concept_hidden[i].gather(0, head.unsqueeze(-1).expand(head.shape[0], hidden_size)) # [b, # of head noes, d] [60, 89, 768]
+            scatter_add(o, tail, dim=0, out=update_node[i])
+            scatter_add(count, tail, dim=0, out=count_out[i])
+
+            o = concept_hidden[i].gather(0, tail.unsqueeze(-1).expand(tail.shape[0], hidden_size))
+            scatter_add(o, head, dim=0, out=update_node[i])
+            scatter_add(count, head, dim=0, out=count_out[i])
+        act = nn.ReLU()
+        update_node = self.W_s[layer_idx](concept_hidden) + self.W_n[layer_idx](update_node) / count_out.clamp(min=1).unsqueeze(2)
+        update_node = act(update_node)
+
+        # print("update_node:", update_node.shape, update_node)
+        # count = torch.ones_like(head).to(head.device).masked_fill_(triple_label == -1, 0).float() # [4, 600]
+        # count_out = torch.zeros(bsz, mem).to(head.device).float() # [4, 300]
+        #
+        # # head [4, 600], tail [4, 600]
+        # o = concept_hidden.gather(1, head.unsqueeze(2).expand(bsz, mem_t, hidden_size))
+        # o = o.masked_fill(triple_label.unsqueeze(2) == -1, 0)
+        #
+        # scatter_add(o, tail, dim=1, out=update_node)
+        # scatter_add( - relation_hidden.masked_fill(triple_label.unsqueeze(2) == -1, 0), tail, dim=1, out=update_node)
+        # scatter_add(count, tail, dim=1, out=count_out)
+        #
+        # o = concept_hidden.gather(1, tail.unsqueeze(2).expand(bsz, mem_t, hidden_size))
+        # o = o.masked_fill(triple_label.unsqueeze(2) == -1, 0)
+        # scatter_add(o, head, dim=1, out=update_node)
+        # scatter_add( - relation_hidden.masked_fill(triple_label.unsqueeze(2) == -1, 0), head, dim=1, out=update_node)
+        # scatter_add(count, head, dim=1, out=count_out)
+        #
+        # act = nn.ReLU()
+        # update_node = self.W_s[layer_idx](concept_hidden) + self.W_n[layer_idx](update_node) / count_out.clamp(min=1).unsqueeze(2)
+        # update_node = act(update_node)
+
+        # return update_node, self.W_r[layer_idx](relation_hidden)
+        return update_node
 
     def multi_layer_gcn(self, concept_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
@@ -231,13 +293,6 @@ class GraphEncoder(nn.Module):
         # bsz x L x mem
         return total_concept_prob
 
-    def get_nonzero_rows(self, M):# M is a matrix
-        # row_ind = M.sum(-1).nonzero().squeeze() #nonzero has bugs in Pytorch 1.2.0.........
-        #So we use other methods to take place of it
-        MM, MM_ind = M.sum(-1).sort()
-        N = (M.sum(-1)>0).sum()
-        return M[MM_ind[:N]]
-
     def forward(self, concept_ids, distance, head, tail, relation, triple_label, mixture_ids=None, adj=None):
         
         memory = self.embed_word(concept_ids)
@@ -247,20 +302,30 @@ class GraphEncoder(nn.Module):
             mixture_embed = self.mixture_embed(mixture_ids)
             memory = memory + 1.0 * mixture_embed
 
-        # coarse_x = memory
-        # for i in range(1):
-        #     coarse_x, adj, S, head, tail = self.coarsen_graph(coarse_x, rel_repr, head, tail, triple_label, adj)
+        coarse_x = memory
+        # print("adj1:", adj[0].nonzero().shape, adj[0].nonzero().tolist())
+        for i in range(3):
+            coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+            # print("adj2:", adj[0].nonzero().shape, adj[0].nonzero().tolist())
+            # print()
+        # for i in range(memory.shape[0]):
+        #     head = adj[i].nonzero()[:, 0]
+        #     tail = adj[i].nonzero()[:, 1]
 
-        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number, adj=adj)
-        head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
-        tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
 
-        # bsz x mem_triple x hidden
-        triple_repr = torch.cat((head_repr, rel_repr, tail_repr), dim=-1)
+        # node_repr = concept outputs
+        # node_repr, rel_repr = self.multi_layer_comp_gcn(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, adj, triple_label, layer_number=self.hop_number)
 
-        opt_loss = 0.0
-        # epsilon = 0.01
-        # opt_epochs = 100
+        # head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
+        # tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
+        #
+        # # bsz x mem_triple x hidden
+        # triple_repr = torch.cat((head_repr, rel_repr, tail_repr), dim=-1)
+
+        # opt_loss = 0.0
+        # epsilon = 1.0
+        # opt_epochs = 10
         # for i in range(len(memory)):
         #     mem = self.get_nonzero_rows(memory[i])
         #     new_mem = self.get_nonzero_rows(node_repr[i])
@@ -269,8 +334,10 @@ class GraphEncoder(nn.Module):
         #     if new_mem.shape[0] == 0: continue
         #     loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs).float()
         #     opt_loss += loss
+        #     # print("mem.shape:", mem.shape, "new_mem.shape:", new_mem.shape, "opt_loss:", loss.item())
 
-        return node_repr, triple_repr
+        # return node_repr, triple_repr, memory
+        return node_repr, memory
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 

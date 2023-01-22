@@ -358,8 +358,7 @@ class Seq2SeqTrainer(Trainer):
                     logging.info("[Best-Eval] best metrics: %s" % (self.best_metric))
             if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
                 break
-        # if self.data_args.use_wandb:
-        #     wandb.log({})
+
         train_pbar.close()
         if self.tb_writer:
             self.tb_writer.close()

@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from packaging import version
 from torch import nn
 from torch.utils.data.dataloader import DataLoader
+
+from trainers.kgtrainer_utils import sinkhorn_loss_default
 from trainers.seq2seq_trainer import Seq2SeqTrainer
 
 from transformers.trainer_utils import (
@@ -105,8 +107,9 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             
         # do the expert training!
         model.train()
-        lm_loss, kg_loss = self.compute_loss(model, inputs)
-        loss = lm_loss + self.loss_ratio * kg_loss
+        lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
+        loss = lm_loss + self.loss_ratio * kg_loss + 0.1 * opt_loss
+        # print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
 
         if self.args.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -128,11 +131,12 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         
         lm_labels = inputs.pop("labels")
         kg_labels = inputs.pop("concept_labels")
-        lm_outputs, kg_logits = model(**inputs, use_cache=False)
+        lm_outputs, kg_logits, kg_outputs, kg_hidden = model(**inputs, use_cache=False)
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        return lm_loss, kg_loss
+        opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden)
+        return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
         
@@ -179,6 +183,27 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             return _node_loss
         
         return node_loss
+
+    def _compute_opt_loss(self, node_output, node_hidden):
+        # print(node_output.shape, node_hidden.shape)
+        opt_loss = 0.0
+        epsilon = 1.0
+        opt_epochs = 10
+        for i in range(len(node_output)):
+            mem = self.get_nonzero_rows(node_output[i])
+            new_mem = self.get_nonzero_rows(node_hidden[i])
+            if mem.shape[0] == 0: continue
+            if new_mem.shape[0] == 0: continue
+            loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs).float()
+            opt_loss += loss
+        return opt_loss
+
+    def get_nonzero_rows(self, M):  # M is a matrix
+        # row_ind = M.sum(-1).nonzero().squeeze() #nonzero has bugs in Pytorch 1.2.0.........
+        # So we use other methods to take place of it
+        MM, MM_ind = M.sum(-1).sort()
+        N = (M.sum(-1) > 0).sum()
+        return M[MM_ind[:N]]
 
     def prediction_step(
         self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], prediction_loss_only: bool
