@@ -372,29 +372,54 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
             if decoder_input_ids is None:
                 decoder_input_ids = shift_tokens_right(lm_labels, self.config.pad_token_id)
         # decoder_outputs + encoder_outputs, concept_outputs
-        lm_outputs, kg_outputs, kg_hidden = self.model(
-            input_ids,
-            lm_mixture_ids=lm_mixture_ids,
-            attention_mask=attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            encoder_outputs=encoder_outputs,
-            decoder_attention_mask=decoder_attention_mask,
-            past_key_values=past_key_values,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            # KG Inputs!
-            concept_ids=concept_ids,
-            kg_mixture_ids=kg_mixture_ids,
-            concept_distances=concept_distances,
-            concept_labels=concept_labels,
-            head_ids=head_ids,
-            tail_ids=tail_ids,
-            relation_ids=relation_ids,
-            triple_labels=triple_labels,
-            adj=adj,
-        )
+        if self.model.training:
+            lm_outputs, kg_outputs, kg_hidden = self.model(
+                input_ids,
+                lm_mixture_ids=lm_mixture_ids,
+                attention_mask=attention_mask,
+                decoder_input_ids=decoder_input_ids,
+                encoder_outputs=encoder_outputs,
+                decoder_attention_mask=decoder_attention_mask,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                # KG Inputs!
+                concept_ids=concept_ids,
+                kg_mixture_ids=kg_mixture_ids,
+                concept_distances=concept_distances,
+                concept_labels=concept_labels,
+                head_ids=head_ids,
+                tail_ids=tail_ids,
+                relation_ids=relation_ids,
+                triple_labels=triple_labels,
+                adj=adj,
+            )
+        else:
+            lm_outputs, kg_outputs = self.model(
+                input_ids,
+                lm_mixture_ids=lm_mixture_ids,
+                attention_mask=attention_mask,
+                decoder_input_ids=decoder_input_ids,
+                encoder_outputs=encoder_outputs,
+                decoder_attention_mask=decoder_attention_mask,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                # KG Inputs!
+                concept_ids=concept_ids,
+                kg_mixture_ids=kg_mixture_ids,
+                concept_distances=concept_distances,
+                concept_labels=concept_labels,
+                head_ids=head_ids,
+                tail_ids=tail_ids,
+                relation_ids=relation_ids,
+                triple_labels=triple_labels,
+                adj=adj,
+            )
         lm_logits = F.linear(lm_outputs[0], self.model.shared.weight, bias=self.final_logits_bias)
 
         masked_lm_loss = None
@@ -494,6 +519,7 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
         tail_ids: Optional[torch.LongTensor] = None,
         relation_ids: Optional[torch.LongTensor] = None,
         triple_labels: Optional[torch.LongTensor] = None,
+        adj: Optional[torch.FloatTensor] = None,
         **model_kwargs
     ) -> torch.LongTensor:
 
@@ -649,13 +675,14 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
 
             input_ids = self.repeat(input_ids, num_beams)
             attention_mask = self.repeat(attention_mask, num_beams)
+            adj = self.repeat(adj, num_beams)
 
             mixture_tmp = torch.arange(num_beams, dtype=torch.long, device=input_ids.device).view(
                     num_beams, 1).repeat(_batch_size, 1)
             kg_mixture_ids = mixture_tmp.expand(concept_ids.shape)
-            concept_outputs, _ = graph_encoder(concept_ids, distance=concept_distances, 
+            concept_outputs, concept_hidden = graph_encoder(concept_ids, distance=concept_distances,
                 head=head_ids, tail=tail_ids, relation=relation_ids, 
-                triple_label=triple_labels, mixture_ids=kg_mixture_ids)
+                triple_label=triple_labels, mixture_ids=kg_mixture_ids, adj=adj)
 
             kg_logits = self._calculate_kg_logits(concept_outputs)
             

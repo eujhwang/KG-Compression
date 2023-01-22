@@ -228,6 +228,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                     tail_ids=inputs["tail_ids"],
                     relation_ids=inputs["relation_ids"],
                     triple_labels=inputs["triple_labels"],
+                    adj=inputs["adj"],
                     # Others!
                     num_beams=self.data_args.eval_beams,
                     num_return_sequences=num_return_sequences,
@@ -244,7 +245,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
             lm_labels = inputs.get("labels")
 
-            lm_outputs, _ = model(**inputs, use_cache=False)
+            lm_outputs, _, _, _ = model(**inputs, use_cache=False)
             loss = self._compute_loss(lm_outputs[0], lm_labels)
             loss = loss.mean().item()
             if self.args.prediction_loss_only:
