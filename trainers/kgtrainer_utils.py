@@ -757,8 +757,6 @@ def sinkhorn_loss(x, y, epsilon, mu, nu, n, m, p=2, niter=100, acc=1e-3, unbalan
     v.requires_grad = True
     actual_nits = 0  # to check if algorithm terminates because of threshold or max iterations reached
 
-    print(mu.device, u.device, v.device)
-
     for i in range(niter):
         u1 = u  # useful to check the update
         if (unbalanced):
