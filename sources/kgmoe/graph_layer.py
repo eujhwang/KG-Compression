@@ -337,7 +337,7 @@ class GraphEncoder(nn.Module):
         #     # print("mem.shape:", mem.shape, "new_mem.shape:", new_mem.shape, "opt_loss:", loss.item())
 
         # return node_repr, triple_repr, memory
-        return node_repr, memory
+        return node_repr.to(memory.device), memory
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 
