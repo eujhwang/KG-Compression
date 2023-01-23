@@ -62,8 +62,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
     def _training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], optimizer) -> torch.Tensor:
 
-        self.B, self.L = inputs['labels'].shape
-        self.BC, self.LC = inputs['concept_labels'].shape
+        self.B, self.L = inputs['labels'].shape # target_ids
+        self.BC, self.LC = inputs['concept_labels'].shape # concept_labels
         assert self.B == self.BC
         self.pad_mask = (inputs['labels'] == self.config.pad_token_id).view(self.B, 1, self.L).to(self.args.device)
         self.concept_pad_mask = (inputs['concept_labels'] == self.config.pad_token_id).view(self.BC, 1, self.LC).to(self.args.device)
@@ -128,7 +128,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         return loss.detach()
 
     def compute_loss(self, model, inputs):
-        
+        # labels=target_ids, concept_labels (if label in source subgraph is one of target concpets)
         lm_labels = inputs.pop("labels")
         kg_labels = inputs.pop("concept_labels")
         lm_outputs, kg_logits, kg_outputs, kg_hidden = model(**inputs, use_cache=False)

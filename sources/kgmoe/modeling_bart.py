@@ -295,6 +295,7 @@ class BartEncoder(nn.Module):
         x = x.transpose(0, 1)
 
         if not return_dict:
+            # currently just returning x. encoder_states=None, all_attentions=None
             return tuple(v for v in [x, encoder_states, all_attentions] if v is not None)
 
         return BaseModelOutput(last_hidden_state=x, hidden_states=encoder_states, attentions=all_attentions)
