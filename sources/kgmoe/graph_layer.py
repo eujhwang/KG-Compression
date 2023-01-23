@@ -296,8 +296,15 @@ class GraphEncoder(nn.Module):
         for i in range(bsz):
             tmp_head = adj[i].nonzero()[:, 0]
             tmp_tail = adj[i].nonzero()[:, 1]
-            print("tmp_head:", tmp_head.shape, tmp_head[:20])
-            print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
+
+            if len(tmp_head) > head.shape[1]:
+                print("len(tmp_head) is too long", len(tmp_head))
+                continue
+            if len(tmp_tail) > tail.shape[1]:
+                print("len(tmp_tail) is too long", len(tmp_tail))
+                continue
+            # print("tmp_head:", tmp_head.shape, tmp_head[:20])
+            # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
             head[i, :len(tmp_head)] = tmp_head
             tail[i, :len(tmp_tail)] = tmp_tail
 
