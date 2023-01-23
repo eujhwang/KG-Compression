@@ -189,7 +189,7 @@ class GraphEncoder(nn.Module):
         o = o.masked_fill(tail.unsqueeze(2) == -1, 0)
         scatter_add(o, _head.squeeze(2), dim=1, out=update_node)
         scatter_add(count, _head.squeeze(2), dim=1, out=count_out)
-
+        # print("concept_hidden:", concept_hidden.shape, "head:", head.shape, "update_node:", update_node.shape, "count_out:", count_out.shape)
         act = nn.ReLU()
         update_node = self.W_s[layer_idx](concept_hidden) + self.W_n[layer_idx](update_node) / count_out.clamp(min=1).unsqueeze(2)
         update_node = act(update_node)
@@ -296,6 +296,8 @@ class GraphEncoder(nn.Module):
         for i in range(bsz):
             tmp_head = adj[i].nonzero()[:, 0]
             tmp_tail = adj[i].nonzero()[:, 1]
+            print("tmp_head:", tmp_head.shape, tmp_head[:20])
+            print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
             head[i, :len(tmp_head)] = tmp_head
             tail[i, :len(tmp_tail)] = tmp_tail
 
