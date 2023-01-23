@@ -172,7 +172,7 @@ class GraphEncoder(nn.Module):
 
         # print("update_node:", update_node.shape, update_node)
         count = torch.ones_like(head).to(head.device).masked_fill_(head == -1, 0).float() # [4, 600]
-        count_out = torch.zeros(bsz, mem).to(head.device).float() # [4, 300]
+        count_out = torch.zeros((concept_hidden.shape[0], concept_hidden.shape[1])).to(head.device).float() # [4, 300]
 
         # head [4, 600], tail [4, 600]
         _head = head.unsqueeze(2)
