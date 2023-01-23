@@ -73,18 +73,18 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         mixture_tmp = torch.arange(self.mixtures, dtype=torch.long, device=inputs['input_ids'].device).view(self.mixtures, 1) # [2, 1] [[0], [1]]
         kg_mixture_ids = mixture_tmp.repeat(inputs['concept_ids'].shape) # [120, 300] [[0, 0, 0, ..., 0], [1, 1, 1, ..., 1], ..., [0, 0, 0, ..., 0], [1, 1, 1, ..., 1]]
 
-        # if self.mixture_embedding:
-        #
-        #     lm_mixture_ids = mixture_tmp.repeat(inputs['input_ids'].shape)
-        #     mixture_inputs = {k: self.repeat(v, self.mixtures) for k, v in inputs.items()}
-        #     mixture_inputs['lm_mixture_ids'] = lm_mixture_ids
-        #     mixture_inputs['kg_mixture_ids'] = kg_mixture_ids
-        #     model.eval()
-        #
-        #     mixture_ids = self.compute_mixture_ids(model, mixture_inputs)
-        #     inputs['lm_mixture_ids'] = mixture_ids.expand(inputs['input_ids'].shape)
-        #     inputs['kg_mixture_ids'] = mixture_ids.expand(inputs['concept_ids'].shape)
-        #
+        if self.mixture_embedding:
+
+            lm_mixture_ids = mixture_tmp.repeat(inputs['input_ids'].shape)
+            mixture_inputs = {k: self.repeat(v, self.mixtures) for k, v in inputs.items()}
+            mixture_inputs['lm_mixture_ids'] = lm_mixture_ids
+            mixture_inputs['kg_mixture_ids'] = kg_mixture_ids
+            model.eval()
+
+            mixture_ids = self.compute_mixture_ids(model, mixture_inputs)
+            inputs['lm_mixture_ids'] = mixture_ids.expand(inputs['input_ids'].shape)
+            inputs['kg_mixture_ids'] = mixture_ids.expand(inputs['concept_ids'].shape)
+
         # else: # using prompt as different expert
         #
         #     mixture_ids_prompt = self.expert_prompt.repeat(self.B, 1).to(self.args.device)
@@ -143,21 +143,21 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         _inputs = inputs.copy()
         _lm_labels = _inputs.pop("labels")
         _kg_labels = _inputs.pop("concept_labels")
-        lm_outputs, kg_logits = model(**_inputs, use_cache=False)
+        lm_outputs, kg_logits, kg_outputs, kg_hidden = model(**_inputs, use_cache=False)
         lm_logits = lm_outputs[0]
         mixture_ids = self._compute_mixture_loss(lm_logits, kg_logits, _lm_labels, _kg_labels)
         return mixture_ids
 
     def _compute_mixture_loss(self, lm_logits, kg_logits, lm_labels, kg_labels):
-
+        # lm_logits & lm_labels: [180, 27] (decoder_dim), kg_logits & kg_labels: [180, 300]
         assert lm_logits.shape[:2] == lm_labels.shape
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction='none')
         
         lm_loss = loss_fct(lm_logits.view(-1, lm_logits.shape[-1]), lm_labels.view(-1)).reshape(self.B, self.mixtures, self.L)
         lm_loss = lm_loss.masked_fill(self.pad_mask, 0).sum(dim=2)
         
-        kg_loss = self._compute_kg_loss(kg_logits, kg_labels, reduction='none').view(self.BC, self.mixtures, self.LC)
-        kg_loss = kg_loss.masked_fill(self.concept_pad_mask, 0).sum(dim=2)
+        # kg_loss = self._compute_kg_loss(kg_logits, kg_labels, reduction='none').view(self.BC, self.mixtures, self.LC)
+        # kg_loss = kg_loss.masked_fill(self.concept_pad_mask, 0).sum(dim=2)
 
         mixture_ids = lm_loss.argmin(dim=1).unsqueeze(dim=1).type(torch.int64)
 
@@ -245,10 +245,11 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
             lm_labels = inputs.get("labels")
             lm_outputs, _, _, _ = model(**inputs, use_cache=False)
-            loss = self._compute_loss(lm_outputs[0], lm_labels)
-            loss = loss.mean().item()
-            if self.args.prediction_loss_only:
-                return (loss, None, None)
+            # TODO: not sure why computing loss here
+            # loss = self._compute_loss(lm_outputs[0], lm_labels)
+            # loss = loss.mean().item()
+            # if self.args.prediction_loss_only:
+            #     return (loss, None, None)
 
             lm_logits = generated_tokens if self.args.predict_with_generate else lm_outputs[1]
         
