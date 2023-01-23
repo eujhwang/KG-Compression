@@ -91,21 +91,8 @@ class GraphEncoder(nn.Module):
         embedding_tensor = torch.matmul(torch.transpose(S, 1, 2), x)  # equals to torch.einsum('bij,bjk->bik',...)
         new_adj = torch.matmul(torch.matmul(torch.transpose(S, 1, 2), adj), S)  # batched matrix multiply
 
-        bsz = head.shape[0]//self.num_mixtures
-        new_head = torch.full([bsz, head.shape[1]], -1).to(concept_hidden.device)
-        new_tail = torch.full([bsz, tail.shape[1]], -1).to(concept_hidden.device)
-        for i in range(bsz):
-            tmp_head = new_adj[i].nonzero()[:, 0]
-            tmp_tail = new_adj[i].nonzero()[:, 1]
-            new_head[i, :len(tmp_head)] = tmp_head
-            new_tail[i, :len(tmp_tail)] = tmp_tail
-
-        expand_size = bsz, self.num_mixtures, head.shape[-1]
-        new_head = new_head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz *  self.num_mixtures, head.shape[-1])
-        new_tail = new_tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz *  self.num_mixtures, tail.shape[-1])
-
         # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
-        return embedding_tensor, new_adj, new_head, new_tail
+        return embedding_tensor, new_adj
 
     def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
@@ -301,7 +288,20 @@ class GraphEncoder(nn.Module):
 
         coarse_x = memory
         for i in range(3):
-            coarse_x, adj, head, tail = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+            coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+
+        bsz = head.shape[0] // self.num_mixtures
+        head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
+        tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
+        for i in range(bsz):
+            tmp_head = adj[i].nonzero()[:, 0]
+            tmp_tail = adj[i].nonzero()[:, 1]
+            head[i, :len(tmp_head)] = tmp_head
+            tail[i, :len(tmp_tail)] = tmp_tail
+
+        expand_size = bsz, self.num_mixtures, head.shape[-1]
+        head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
+        tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
 
         # node_repr = concept outputs
         # node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
