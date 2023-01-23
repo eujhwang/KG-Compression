@@ -58,8 +58,7 @@ class BartMoEModel(PretrainedBartModel):
         super().__init__(config)
 
         padding_idx, vocab_size = config.pad_token_id, config.vocab_size
-        self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
-
+        self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx) # 50265, 768, 1
         self.encoder = BartEncoder(config, self.shared)
         self.decoder = BartDecoder(config, self.shared)
 
