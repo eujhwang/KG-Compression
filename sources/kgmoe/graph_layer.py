@@ -299,23 +299,16 @@ class GraphEncoder(nn.Module):
         rel_repr = self.relation_embed(relation)
 
         if mixture_ids is not None:
-            mixture_embed = self.mixture_embed(mixture_ids)
+            mixture_embed = self.mixture_embed(mixture_ids) # [60*3, 300, 768]
             memory = memory + 1.0 * mixture_embed
 
-        coarse_x = memory
-        # print("adj1:", adj[0].nonzero().shape, adj[0].nonzero().tolist())
-        for i in range(3):
-            coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
-            # print("adj2:", adj[0].nonzero().shape, adj[0].nonzero().tolist())
-            # print()
-        # for i in range(memory.shape[0]):
-        #     head = adj[i].nonzero()[:, 0]
-        #     tail = adj[i].nonzero()[:, 1]
-
+        # coarse_x = memory
+        # for i in range(3):
+        #     coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
 
         # node_repr = concept outputs
-        # node_repr, rel_repr = self.multi_layer_comp_gcn(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, adj, triple_label, layer_number=self.hop_number)
+        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        # node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, adj, triple_label, layer_number=self.hop_number)
 
         # head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
         # tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
