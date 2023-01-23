@@ -136,7 +136,8 @@ class GraphEncoder(nn.Module):
 
     def multi_layer_gcn2(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
-            concept_hidden = self.gcn2(concept_hidden, relation_hidden, head, tail, triple_label, i)
+            _concept_hidden = self.gcn2(concept_hidden, relation_hidden, head, tail, triple_label, i)
+            concept_hidden = concept_hidden + _concept_hidden
         return concept_hidden
 
     def gcn2(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx):
@@ -287,37 +288,37 @@ class GraphEncoder(nn.Module):
             memory = memory + 1.0 * mixture_embed
 
         # Coarsening Step
-        # coarse_x = memory
-        # for i in range(3):
-        #     coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
-        #
-        # bsz = head.shape[0] // self.num_mixtures
-        # head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
-        # tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
-        # skipped = 0
-        # for i in range(bsz):
-        #     tmp_head = adj[i].nonzero()[:, 0]
-        #     tmp_tail = adj[i].nonzero()[:, 1]
-        #
-        #     if len(tmp_head) > head.shape[1]:
-        #         skipped += 1
-        #         continue
-        #     if len(tmp_tail) > tail.shape[1]:
-        #         continue
-        #     # print("tmp_head:", tmp_head.shape, tmp_head[:20])
-        #     # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
-        #     head[i, :len(tmp_head)] = tmp_head
-        #     tail[i, :len(tmp_tail)] = tmp_tail
-        # if skipped > 0:
-        #     print("skipped:", skipped)
-        # expand_size = bsz, self.num_mixtures, head.shape[-1]
-        # head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
-        # tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
+        coarse_x = memory
+        for i in range(3):
+            coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+
+        bsz = head.shape[0] // self.num_mixtures
+        head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
+        tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
+        skipped = 0
+        for i in range(bsz):
+            tmp_head = adj[i].nonzero()[:, 0]
+            tmp_tail = adj[i].nonzero()[:, 1]
+
+            if len(tmp_head) > head.shape[1]:
+                skipped += 1
+                continue
+            if len(tmp_tail) > tail.shape[1]:
+                continue
+            # print("tmp_head:", tmp_head.shape, tmp_head[:20])
+            # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
+            head[i, :len(tmp_head)] = tmp_head
+            tail[i, :len(tmp_tail)] = tmp_tail
+        if skipped > 0:
+            print("skipped:", skipped)
+        expand_size = bsz, self.num_mixtures, head.shape[-1]
+        head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
+        tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
 
         # node_repr = concept outputs
-        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        # node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-
+        # node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        # node_repr = memory + node_repr
         # head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
         # tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
         #

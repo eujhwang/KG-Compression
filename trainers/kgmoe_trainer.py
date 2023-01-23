@@ -135,8 +135,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        # opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
-        opt_loss = 0
+        # opt_loss = 0
+        opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
