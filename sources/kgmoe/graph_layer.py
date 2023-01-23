@@ -75,7 +75,7 @@ class GraphEncoder(nn.Module):
 
         cut_batch_num_nodes = batch_num_nodes
         cut_value = torch.zeros_like(alpha_vec[:, 0])
-        assign_ratio = 0.3
+        assign_ratio = 0.1
         for i in range(bsz):
             if cut_batch_num_nodes[i] > 1:
                 cut_batch_num_nodes[i] = torch.ceil(cut_batch_num_nodes[i].float() * assign_ratio) + 1
