@@ -350,7 +350,11 @@ class Seq2SeqTrainer(Trainer):
                     json.dump(metrics, metric_out, indent=1)
 
                 if self.data_args.use_wandb:
-                    wandb.log(metrics)
+                    wandb_metrics = {}
+                    for key, value in metrics.items():
+                        wandb_metrics.update({f"[Val] {key}": value})
+                    wandb.log(wandb_metrics)
+
                 # ''' save the model '''
                 if metrics[self.args.metric_for_best_model] > self.best_metric:
                     self.best_metric = metrics[self.args.metric_for_best_model]

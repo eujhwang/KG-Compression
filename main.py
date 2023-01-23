@@ -284,7 +284,11 @@ def main():
 
         metrics = {'epoch': 'test_metric'}
         metrics.update(eval_accuracy_diversity(out_pred_path, out_pred_ref, data_args.eval_beams))
-
+        if data_args.use_wandb:
+            wandb_metrics = {}
+            for key, value in metrics.items():
+                wandb_metrics.update({f"[Test] {key}": value})
+            wandb.log(wandb_metrics)
         with open(out_pred_metric, 'w') as metric_out:
             json.dump(metrics, metric_out, indent=1)
 
