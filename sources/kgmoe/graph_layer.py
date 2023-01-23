@@ -286,58 +286,44 @@ class GraphEncoder(nn.Module):
             mixture_embed = self.mixture_embed(mixture_ids) # [60*3, 300, 768]
             memory = memory + 1.0 * mixture_embed
 
-        coarse_x = memory
-        for i in range(3):
-            coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
-
-        bsz = head.shape[0] // self.num_mixtures
-        head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
-        tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
-        skipped = 0
-        for i in range(bsz):
-            tmp_head = adj[i].nonzero()[:, 0]
-            tmp_tail = adj[i].nonzero()[:, 1]
-
-            if len(tmp_head) > head.shape[1]:
-                skipped += 1
-                continue
-            if len(tmp_tail) > tail.shape[1]:
-                continue
-            # print("tmp_head:", tmp_head.shape, tmp_head[:20])
-            # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
-            head[i, :len(tmp_head)] = tmp_head
-            tail[i, :len(tmp_tail)] = tmp_tail
-        if skipped > 0:
-            print("skipped:", skipped)
-        expand_size = bsz, self.num_mixtures, head.shape[-1]
-        head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
-        tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
+        # Coarsening Step
+        # coarse_x = memory
+        # for i in range(3):
+        #     coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+        #
+        # bsz = head.shape[0] // self.num_mixtures
+        # head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
+        # tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
+        # skipped = 0
+        # for i in range(bsz):
+        #     tmp_head = adj[i].nonzero()[:, 0]
+        #     tmp_tail = adj[i].nonzero()[:, 1]
+        #
+        #     if len(tmp_head) > head.shape[1]:
+        #         skipped += 1
+        #         continue
+        #     if len(tmp_tail) > tail.shape[1]:
+        #         continue
+        #     # print("tmp_head:", tmp_head.shape, tmp_head[:20])
+        #     # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
+        #     head[i, :len(tmp_head)] = tmp_head
+        #     tail[i, :len(tmp_tail)] = tmp_tail
+        # if skipped > 0:
+        #     print("skipped:", skipped)
+        # expand_size = bsz, self.num_mixtures, head.shape[-1]
+        # head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
+        # tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
 
         # node_repr = concept outputs
-        # node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        # print(node_repr.nonzero().shape, node_repr.nonzero())
-        # assert False
+        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        # node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+
         # head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
         # tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
         #
         # # bsz x mem_triple x hidden
         # triple_repr = torch.cat((head_repr, rel_repr, tail_repr), dim=-1)
 
-        # opt_loss = 0.0
-        # epsilon = 1.0
-        # opt_epochs = 10
-        # for i in range(len(memory)):
-        #     mem = self.get_nonzero_rows(memory[i])
-        #     new_mem = self.get_nonzero_rows(node_repr[i])
-        #     # print("mem:", mem.shape, "new_mem:", new_mem.shape)
-        #     if mem.shape[0] == 0: continue
-        #     if new_mem.shape[0] == 0: continue
-        #     loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs).float()
-        #     opt_loss += loss
-        #     # print("mem.shape:", mem.shape, "new_mem.shape:", new_mem.shape, "opt_loss:", loss.item())
-
-        # return node_repr, triple_repr, memory
         return node_repr.to(memory.device), memory
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
