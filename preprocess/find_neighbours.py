@@ -76,6 +76,7 @@ def find_neighbours_frequency(source_sentence, source_concepts, target_concepts,
         for s in start:
             if s in cpnet_simple:
                 for n in cpnet_simple[s]:
+                    # if n is one of the source nodes and exists in conceptNet
                     if n not in Vts and n in total_concepts_id_set:
                         if n not in Vts:
                             if n not in V:
@@ -122,7 +123,7 @@ def find_neighbours_frequency(source_sentence, source_concepts, target_concepts,
     labels = []
     found_num = 0
     for c in concepts:
-        if c in ts:
+        if c in ts: # if the concept in the subgraph is target concept, then label is 1, otherwise 0
             found_num += 1
             labels.append(1)
         else:
