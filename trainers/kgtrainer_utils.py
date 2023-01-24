@@ -246,15 +246,6 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         #       "head_ids:", len(head_ids), "tail_ids:", len(tail_ids), "triple_labels:", len(triple_labels), "relations:", len(relations))
         # print()
 
-        # create a graph
-        # graph = nx.MultiDiGraph()
-        # for head, tail, rels in zip(head_ids, tail_ids, relations):
-        #     for rel in rels:
-        #         graph.add_edge(head, tail, rel=rel, weight=1)
-        # A = nx.adjacency_matrix(graph)
-
-        # print("head_max:", max(head_ids), "tail_max", max(tail_ids))
-
         _concept = concept.copy()
         _cpt_label = cpt_label.copy()
         _head_ids = head_ids.copy()
@@ -281,33 +272,19 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
 
         _head_ids, _tail_ids, _relation_ids, _triple_labels = self.encode_triples(
             _head_ids, _tail_ids, _relations, _triple_labels, max_triple_len)
-        # print("_head_ids:", _head_ids)
-        # print("_tail_ids:", _tail_ids)
 
-        # new - eunjeong
-        # graph = nx.DiGraph()
-        adj = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
-        for head, tail, rel in zip(_head_ids, _tail_ids, _relation_ids):
-            # print("head", head.item(), "tail", tail.item(), "rel", rel.item())
-            src = head.item()
-            dst = tail.item()
-            if adj[src, dst] == 0:
-                adj[src, dst] = 1
-            else:
-                adj[src, dst] += 1
-            # graph.add_edge(head.item(), tail.item(), rel=rel.item(), weight=1)
-            # if head.item() == 0:
-                # print("head:", head.item(), "tail:", tail.item(), "rel:", rel.item())
-            # break
-        # print(graph.nodes())
-        # assert False
-        # A = nx.to_numpy_matrix(graph)
-        # print("A:", adj.shape, adj)
-        # print("A.nonzero():", adj.nonzero().tolist())
-        # assert False
-        # A = torch.tensor(A.todense(), device=_concept_ids.device, dtype=torch.float)
-        # _A = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
-        # _A[:A.shape[0], :A.shape[1]] = A
+        ########################################## new - eunjeong ##############################
+        adj = None
+        # adj = torch.zeros((max_concept_length, max_concept_length), device=_concept_ids.device)
+        # for head, tail, rel in zip(_head_ids, _tail_ids, _relation_ids):
+        #     # print("head", head.item(), "tail", tail.item(), "rel", rel.item())
+        #     src = head.item()
+        #     dst = tail.item()
+        #     if adj[src, dst] == 0:
+        #         adj[src, dst] = 1
+        #     else:
+        #         adj[src, dst] += 1
+        ########################################## end ##########################################
 
         return {
             "input_ids": source_ids,
@@ -444,7 +421,7 @@ class Seq2SeqDataCollator:
         relation_ids = torch.stack([x["relation_ids"] for x in batch])
         triple_labels = torch.stack([x["triple_labels"] for x in batch])
         labels = trim_batch(labels, self.pad_token_id)
-        adj = torch.stack([x["adj"] for x in batch])
+        # adj = torch.stack([x["adj"] for x in batch])
 
         oracle_concept_ids = None
         if batch[0]["oracle_concept_ids"] is not None:
@@ -472,7 +449,7 @@ class Seq2SeqDataCollator:
             "tail_ids": tail_ids,
             "relation_ids": relation_ids,
             "triple_labels": triple_labels,
-            "adj": adj,
+            "adj": None,
         }
 
         return batch

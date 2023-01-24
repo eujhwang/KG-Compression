@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
 from torch.nn import Parameter, Linear
+from torch_geometric.nn.pool.topk_pool import topk, filter_adj
 from torch_scatter import scatter_max, scatter_mean, scatter_add
 import torch.nn.functional as F
+from torch_geometric.nn import global_mean_pool, global_max_pool
 
 from trainers.kgtrainer_utils import sinkhorn_loss_default
 
 
-# from torch_geometric.nn import DenseGCNConv
+from torch_geometric.nn import DenseGCNConv, GCNConv
 # from torch_geometric.nn.dense.linear import Linear
 
 class GraphEncoder(nn.Module):
@@ -25,7 +27,7 @@ class GraphEncoder(nn.Module):
 
         self.relation_embed = nn.Embedding(50, embed_size, padding_idx=0)
         
-        self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
+        # self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
         
         self.W_s = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)]) 
         self.W_n = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
@@ -33,11 +35,13 @@ class GraphEncoder(nn.Module):
         self.gate_linear = nn.Linear(embed_size, 1)
 
         # self.gcn_att = DenseGCNConv(embed_size, 1, bias=True)
-        out_dim = 1
-        self.lin = Linear(embed_size, out_dim, bias=False)
-        self.bias = Parameter(torch.Tensor(out_dim))
+        self.lin = Linear(embed_size, 1, bias=False)
+        self.bias = Parameter(torch.Tensor(1))
         self.reset_parameters()
-            
+
+        self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
+        self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=False)
+
     def reset_parameters(self):
         self.lin.reset_parameters()
 
@@ -94,6 +98,34 @@ class GraphEncoder(nn.Module):
         # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
         return embedding_tensor, new_adj
 
+    def sag_pooling(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, adj):
+        bsz = head.size(0)  # batch_size 4
+        # mem_t = head.size(1)  # max_triple_len 600
+        mem = concept_hidden.size(1)  # max_concept_length 300
+        # hidden_size = concept_hidden.size(2)  # concept hidden size 768
+
+        # concept_hidden (b, n, d) (180, 300, 768) adj (b, n, n)
+        x = concept_hidden
+
+        assign_ratio = 0.7
+        new_Xs = []
+        for i in range(bsz):
+            xi = x[i]
+            edge_index = torch.stack([head[i, :], tail[i, :]], dim=1).T
+            score = self.score_layer(xi, edge_index.to(x.device)).squeeze()
+            label = edge_index.new_zeros(xi.size(0))
+
+            perm = topk(score, assign_ratio, label)
+            _xi = xi[perm] * F.relu(score[perm]).view(-1, 1)
+            new_xi = torch.zeros(xi.shape, device=x.device)
+            new_xi[perm] = _xi
+            # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
+
+            new_xi = self.node_linear(new_xi)
+            new_Xs.append(new_xi)
+        node_repr = torch.stack(new_Xs, dim=0).to(x.device)
+        return node_repr
+
     def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
             concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
@@ -136,8 +168,7 @@ class GraphEncoder(nn.Module):
 
     def multi_layer_gcn2(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
-            _concept_hidden = self.gcn2(concept_hidden, relation_hidden, head, tail, triple_label, i)
-            concept_hidden = concept_hidden + _concept_hidden
+            concept_hidden = self.gcn2(concept_hidden, relation_hidden, head, tail, triple_label, i)
         return concept_hidden
 
     def gcn2(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx):
@@ -287,43 +318,59 @@ class GraphEncoder(nn.Module):
             mixture_embed = self.mixture_embed(mixture_ids) # [60*3, 300, 768]
             memory = memory + 1.0 * mixture_embed
 
-        # Coarsening Step
-        coarse_x = memory
-        for i in range(3):
-            coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+        ###################################### start of sag_pooling ######################################
+        concept_hidden_list = [memory]
+        relation_hidden_list = [rel_repr]
+        for i in range(self.hop_number):
+            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden_list[-1], relation_hidden_list[-1], head, tail, triple_label, i)
+            concept_hidden_list.append(concept_hidden)
+            relation_hidden_list.append(relation_hidden)
 
-        bsz = head.shape[0] // self.num_mixtures
-        head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
-        tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
-        skipped = 0
-        for i in range(bsz):
-            tmp_head = adj[i].nonzero()[:, 0]
-            tmp_tail = adj[i].nonzero()[:, 1]
+        node_repr = torch.cat(concept_hidden_list, dim=-1) # [bsz, #concepts, 768 * num_hop]
+        node_repr = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, adj)
+        ###################################### end of sag_pooling ######################################
 
-            if len(tmp_head) > head.shape[1]:
-                skipped += 1
-                continue
-            if len(tmp_tail) > tail.shape[1]:
-                continue
-            # print("tmp_head:", tmp_head.shape, tmp_head[:20])
-            # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
-            head[i, :len(tmp_head)] = tmp_head
-            tail[i, :len(tmp_tail)] = tmp_tail
-        if skipped > 0:
-            print("skipped:", skipped)
-        expand_size = bsz, self.num_mixtures, head.shape[-1]
-        head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
-        tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
+        ###################################### start of Coarsening ######################################
+        # coarse_x = memory
+        # for i in range(3):
+        #     coarse_x, adj = self.coarsen_graph(coarse_x, rel_repr, head, tail, relation, triple_label, adj)
+        #
+        # bsz = head.shape[0] // self.num_mixtures
+        # head = torch.full([bsz, head.shape[1]], -1).to(memory.device)
+        # tail = torch.full([bsz, tail.shape[1]], -1).to(memory.device)
+        # skipped = 0
+        # for i in range(bsz):
+        #     tmp_head = adj[i].nonzero()[:, 0]
+        #     tmp_tail = adj[i].nonzero()[:, 1]
+        #
+        #     if len(tmp_head) > head.shape[1]:
+        #         skipped += 1
+        #         continue
+        #     if len(tmp_tail) > tail.shape[1]:
+        #         continue
+        #     # print("tmp_head:", tmp_head.shape, tmp_head[:20])
+        #     # print("tmp_tail:", tmp_tail.shape, tmp_tail[:20])
+        #     head[i, :len(tmp_head)] = tmp_head
+        #     tail[i, :len(tmp_tail)] = tmp_tail
+        # if skipped > 0:
+        #     print("skipped:", skipped)
+        # expand_size = bsz, self.num_mixtures, head.shape[-1]
+        # head = head.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, head.shape[-1])
+        # tail = tail.unsqueeze(1).expand(*expand_size).contiguous().view(bsz * self.num_mixtures, tail.shape[-1])
+        # node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+        ###################################### end of Coarsening ######################################
 
+        ###################################### original ######################################
         # node_repr = concept outputs
         # node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        node_repr = self.multi_layer_gcn2(coarse_x, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+
         # node_repr = memory + node_repr
         # head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
         # tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
         #
         # # bsz x mem_triple x hidden
         # triple_repr = torch.cat((head_repr, rel_repr, tail_repr), dim=-1)
+        ###################################### end of original ######################################
 
         return node_repr.to(memory.device), memory
 
