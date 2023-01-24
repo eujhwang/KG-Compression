@@ -332,7 +332,6 @@ class GraphEncoder(nn.Module):
         #     concept_hidden_list.append(concept_hidden)
         #     # relation_hidden_list.append(relation_hidden)
         node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        print("node_repr:", node_repr.shape)
         # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device) # [bsz, #concepts, 768 * num_hop]
         node_repr = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, adj)
         ###################################### end of sag_pooling ######################################
