@@ -319,12 +319,14 @@ class GraphEncoder(nn.Module):
             memory = memory + 1.0 * mixture_embed
 
         ###################################### start of sag_pooling ######################################
+        concept_hidden = memory
+        relation_hidden = rel_repr
         concept_hidden_list = [memory]
-        relation_hidden_list = [rel_repr]
+        # relation_hidden_list = [rel_repr]
         for i in range(self.hop_number):
-            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden_list[-1], relation_hidden_list[-1], head, tail, triple_label, i)
+            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
             concept_hidden_list.append(concept_hidden)
-            relation_hidden_list.append(relation_hidden)
+            # relation_hidden_list.append(relation_hidden)
 
         node_repr = torch.cat(concept_hidden_list, dim=-1) # [bsz, #concepts, 768 * num_hop]
         node_repr = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, adj)
