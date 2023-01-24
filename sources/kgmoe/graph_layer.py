@@ -13,7 +13,8 @@ from torch_geometric.nn import DenseGCNConv, GCNConv
 # from torch_geometric.nn.dense.linear import Linear
 
 class GraphEncoder(nn.Module):
-    def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2, num_mixtures=3):
+    def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
+                 num_mixtures=3, ratio=0.5):
         super(GraphEncoder, self).__init__()
 
         self.hop_number = hop_number
@@ -24,7 +25,8 @@ class GraphEncoder(nn.Module):
         self.aggregate_method = aggregate_method
         self.tokenizer = tokenizer
         self.num_mixtures = num_mixtures
-
+        self.ratio = ratio
+        print("ratio:", self.ratio, "num_mixtures:", self.num_mixtures)
         self.relation_embed = nn.Embedding(50, embed_size, padding_idx=0)
         
         # self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
@@ -107,7 +109,6 @@ class GraphEncoder(nn.Module):
         # concept_hidden (b, n, d) (180, 300, 768) adj (b, n, n)
         x = concept_hidden
 
-        assign_ratio = 0.7
         new_Xs = []
         for i in range(bsz):
             xi = x[i]
@@ -115,7 +116,7 @@ class GraphEncoder(nn.Module):
             score = self.score_layer(xi, edge_index.to(x.device)).squeeze()
             label = edge_index.new_zeros(xi.size(0))
 
-            perm = topk(score, assign_ratio, label)
+            perm = topk(score, self.ratio, label)
             _xi = xi[perm] * F.relu(score[perm]).view(-1, 1)
             new_xi = torch.zeros(xi.shape, device=x.device)
             new_xi[perm] = _xi
