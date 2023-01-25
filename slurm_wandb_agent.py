@@ -53,7 +53,7 @@ def main(args):
     file_str = dict()
     file_str['srun.sh'] = "\n".join((
         "",
-        f"wandb agent {args.sweep_id}",
+        f"wandb agent --count 10 {args.sweep_id}",
         # f"pwd", # for testing
         # f"./test.sh", # for testing
     ))
@@ -65,6 +65,7 @@ def main(args):
         # f"#SBATCH --error={job_dir}/%A-%a.error",
         f"#SBATCH --ntasks={args.num_agents_per_job}",
         f'#SBATCH --array=1-{args.num_jobs}\n' if args.num_jobs > 1 else '',
+        f"source ~/.bashrc",
         f"conda activate {args.conda_env}",
         f"srun {file_path['srun.sh']}"
     ))
