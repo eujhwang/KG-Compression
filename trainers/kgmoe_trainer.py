@@ -58,7 +58,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         self.expert_prompt = self.data_args.expert_prompt
         self.mixture_embedding = self.data_args.mixture_embedding
         self.pows = self.data_args.pows
-        self.loss_ratio = self.data_args.loss_ratio
+        self.kg_loss_ratio = self.data_args.kg_loss_ratio
+        self.opt_loss_ratio = self.data_args.opt_loss_ratio
 
     def _training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], optimizer) -> torch.Tensor:
 
@@ -108,7 +109,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # do the expert training!
         model.train()
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
-        loss = lm_loss + self.loss_ratio * kg_loss + 0.1 * opt_loss
+        loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
 
         if opt_loss == 0:
             print("opt_loss is zero!! ")
@@ -138,7 +139,6 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        # opt_loss = 0
         opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
         return lm_loss, kg_loss, opt_loss
 

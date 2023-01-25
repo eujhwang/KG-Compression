@@ -96,7 +96,8 @@ class DataTrainingArguments:
 
     # For KGMoE methods
     pows: Optional[float] = field(default=6.5, metadata={"help": "specify a token as expert token"})
-    loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
+    kg_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
+    opt_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
     ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
 
