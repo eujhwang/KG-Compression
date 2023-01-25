@@ -202,8 +202,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                 continue
             loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
             opt_loss += loss
-        print("skipped_mem:", skipped_mem)
-        print("skipped_new_mem:", skipped_new_mem)
+        print("skipped_mem:", skipped_mem, "skipped_new_mem:", skipped_new_mem, " ")
+        print()
         return opt_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix

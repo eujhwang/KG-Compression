@@ -117,7 +117,8 @@ class GraphEncoder(nn.Module):
             label = edge_index.new_zeros(xi.size(0))
 
             perm = topk(score, self.ratio, label)
-            _xi = xi[perm] * F.relu(score[perm]).view(-1, 1)
+            # score contains lots of negative values, so relu zero out most of them
+            _xi = xi[perm] * torch.tanh(score[perm]).view(-1, 1)
             new_xi = torch.zeros(xi.shape, device=x.device)
             new_xi[perm] = _xi
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
@@ -128,12 +129,8 @@ class GraphEncoder(nn.Module):
         return node_repr
 
     def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
-        concept_hidden_list = []
         for i in range(layer_number):
-            concept_hidden_list.append(concept_hidden)
             concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
-        concept_hidden_list.append(concept_hidden)
-        concept_hidden = torch.cat(concept_hidden_list, dim=-1)
         return concept_hidden, relation_hidden
 
     def comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx):
@@ -324,16 +321,13 @@ class GraphEncoder(nn.Module):
             memory = memory + 1.0 * mixture_embed
 
         ###################################### start of sag_pooling ######################################
-        # concept_hidden = memory
-        # relation_hidden = rel_repr
-        # concept_hidden_list = [memory]
-        # # relation_hidden_list = [rel_repr]
-        # for i in range(self.hop_number):
-        #     concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
-        #     concept_hidden_list.append(concept_hidden)
-        #     # relation_hidden_list.append(relation_hidden)
-        node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
-        # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device) # [bsz, #concepts, 768 * num_hop]
+        concept_hidden = memory
+        relation_hidden = rel_repr
+        concept_hidden_list = [memory]
+        for i in range(self.hop_number):
+            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
+            concept_hidden_list.append(concept_hidden)
+        node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device) # [bsz, #concepts, 768 * num_hop]
         node_repr = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, adj)
         ###################################### end of sag_pooling ######################################
 
