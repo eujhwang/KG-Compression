@@ -189,21 +189,14 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         opt_loss = 0.0
         epsilon = 1.0
         opt_epochs = 10
-        skipped_mem = 0
-        skipped_new_mem = 0
         for i in range(len(node_output)):
             mem = self.get_nonzero_rows(node_output[i])
             new_mem = self.get_nonzero_rows(node_hidden[i])
-            if mem.shape[0] == 0:
-                skipped_mem += 1
-                continue
-            if new_mem.shape[0] == 0:
-                skipped_new_mem += 1
-                continue
+            if mem.shape[0] == 0: continue
+            if new_mem.shape[0] == 0: continue
             loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
+            print("opt_loss:", loss.item())
             opt_loss += loss
-        print("skipped_mem:", skipped_mem, "skipped_new_mem:", skipped_new_mem, " ")
-        print()
         return opt_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix
