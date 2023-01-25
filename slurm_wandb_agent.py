@@ -23,7 +23,7 @@ def main(args):
     ))
     template_str['sbatch.sh'] = '\n'.join((
         "#!/bin/bash",
-        "#SBATCH --job-name=mokge-new"
+        "#SBATCH --job-name=mokge-new",
         "#SBATCH --gres=gpu:1",
         "#SBATCH --qos=normal",
         "#SBATCH --partition=a40",
