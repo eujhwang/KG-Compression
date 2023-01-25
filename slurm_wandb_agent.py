@@ -24,9 +24,9 @@ def main(args):
     template_str['sbatch.sh'] = '\n'.join((
         "#!/bin/bash",
         "#SBATCH --gres=gpu:1",
-        "#SBATCH --partition=ubcml",
-        "#SBATCH --cpus-per-task=2",
-        "#SBATCH --mem=32GB",
+        "#SBATCH --partition=a40",
+        "#SBATCH --cpus-per-task=4",
+        "#SBATCH --mem=16GB",
         "#SBATCH --time=7-00:00:00",
     ))
 
