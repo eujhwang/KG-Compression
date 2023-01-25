@@ -112,7 +112,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
         if opt_loss == 0:
             print("opt_loss is zero!! ")
-        print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
+        # print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
 
         if self.args.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
