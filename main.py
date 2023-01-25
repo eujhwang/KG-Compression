@@ -99,7 +99,7 @@ class DataTrainingArguments:
     kg_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     opt_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
-    ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
+    assign_ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
 
 
 def set_seed(seed: int):
@@ -204,7 +204,7 @@ def main():
             low=1, high=len(tokenizer), size=(data_args.mixtures, data_args.prompt_nums))
         config.mixtures = data_args.mixtures
         config.mixture_embedding = data_args.mixture_embedding
-        config.ratio = data_args.ratio
+        config.assign_ratio = data_args.assign_ratio
 
     model = BartModel.from_pretrained(
         model_args.model_name_or_path,

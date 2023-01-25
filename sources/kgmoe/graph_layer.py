@@ -14,7 +14,7 @@ from torch_geometric.nn import DenseGCNConv, GCNConv
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
-                 num_mixtures=3, ratio=0.5):
+                 num_mixtures=3, assign_ratio=0.5):
         super(GraphEncoder, self).__init__()
 
         self.hop_number = hop_number
@@ -25,8 +25,8 @@ class GraphEncoder(nn.Module):
         self.aggregate_method = aggregate_method
         self.tokenizer = tokenizer
         self.num_mixtures = num_mixtures
-        self.ratio = ratio
-        print("ratio:", self.ratio, "num_mixtures:", self.num_mixtures)
+        self.assign_ratio = assign_ratio
+        print("assign_ratio:", self.assign_ratio, "num_mixtures:", self.num_mixtures)
         self.relation_embed = nn.Embedding(50, embed_size, padding_idx=0)
         
         # self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
@@ -116,7 +116,7 @@ class GraphEncoder(nn.Module):
             score = self.score_layer(xi, edge_index.to(x.device)).squeeze()
             label = edge_index.new_zeros(xi.size(0))
 
-            perm = topk(score, self.ratio, label)
+            perm = topk(score, self.assign_ratio, label)
             # score contains lots of negative values, so relu zero out most of them
             _xi = xi[perm] * torch.tanh(score[perm]).view(-1, 1)
             new_xi = torch.zeros(xi.shape, device=x.device)
