@@ -23,10 +23,12 @@ def main(args):
     ))
     template_str['sbatch.sh'] = '\n'.join((
         "#!/bin/bash",
+        "#SBATCH --job-name=mokge-new"
         "#SBATCH --gres=gpu:1",
+        "#SBATCH --qos=normal",
         "#SBATCH --partition=a40",
-        "#SBATCH --cpus-per-task=4",
-        "#SBATCH --mem=16GB",
+        "#SBATCH --cpus-per-task=8",
+        "#SBATCH --mem-per-cpu=16GB",
         "#SBATCH --time=7-00:00:00",
     ))
 
@@ -62,7 +64,7 @@ def main(args):
         "",
         f"#SBATCH --job-name={args.sweep_id}",
         f"#SBATCH --output={job_dir}/%A-%a.out",
-        # f"#SBATCH --error={job_dir}/%A-%a.error",
+        f"#SBATCH --error={job_dir}/%A-%a.error",
         f"#SBATCH --ntasks={args.num_agents_per_job}",
         f'#SBATCH --array=1-{args.num_jobs}\n' if args.num_jobs > 1 else '',
         f"source ~/.bashrc",
