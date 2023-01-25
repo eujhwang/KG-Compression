@@ -137,6 +137,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
         # opt_loss = 0
         opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
+        print("opt_loss:", opt_loss.item())
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
@@ -186,7 +187,6 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         return node_loss
 
     def _compute_opt_loss(self, node_output, node_hidden, device):
-        # print(node_output.shape, node_hidden.shape)
         opt_loss = 0.0
         epsilon = 1.0
         opt_epochs = 10

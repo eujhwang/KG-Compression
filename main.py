@@ -1,6 +1,9 @@
 import logging
 import os, sys
 import json
+import random
+
+import numpy as np
 import torch
 import wandb
 from dataclasses import dataclass, field
@@ -9,7 +12,7 @@ from typing import Optional
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
-    set_seed,
+    # set_seed,
 )
 
 from trainers.trainer_utils import (
@@ -96,6 +99,19 @@ class DataTrainingArguments:
     loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
     ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
+
+
+def set_seed(seed: int):
+    """ Set all seeds to make results reproducible (deterministic mode).
+         When seed is None, disables deterministic mode. """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
 
 def main():
 
