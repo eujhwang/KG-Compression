@@ -109,7 +109,10 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         model.train()
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
         loss = lm_loss + self.loss_ratio * kg_loss + 0.1 * opt_loss
-        # print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
+
+        if opt_loss == 0:
+            print("opt_loss is zero!! ")
+        print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
 
         if self.args.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
@@ -186,7 +189,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         return node_loss
 
     def _compute_opt_loss(self, node_output, node_hidden, device):
-        opt_loss = 0.0
+        opt_losses = []
         epsilon = 1.0
         opt_epochs = 10
         for i in range(len(node_output)):
@@ -195,8 +198,12 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             if mem.shape[0] == 0: continue
             if new_mem.shape[0] == 0: continue
             loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
-            opt_loss += loss
-        return opt_loss
+            opt_losses.append(loss)
+        if len(opt_losses) > 0:
+            final_loss = sum(opt_losses)/len(opt_losses)
+        else:
+            final_loss = 0.0
+        return final_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix
         # row_ind = M.sum(-1).nonzero().squeeze() #nonzero has bugs in Pytorch 1.2.0.........
