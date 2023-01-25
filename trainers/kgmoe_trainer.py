@@ -109,13 +109,16 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         model.train()
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
         loss = lm_loss + self.loss_ratio * kg_loss + 0.1 * opt_loss
+        print("loss:", loss.item())
         # print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
 
         if self.args.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            print("loss2:", loss.item())
 
         if self.args.gradient_accumulation_steps > 1:
             loss = loss / self.args.gradient_accumulation_steps
+            print("loss3:", loss.item())
 
         if self.args.fp16 and _use_native_amp:
             self.scaler.scale(loss).backward()
@@ -137,7 +140,6 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
         # opt_loss = 0
         opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
-        print("opt_loss:", opt_loss.item())
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
