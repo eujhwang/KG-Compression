@@ -111,8 +111,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
         loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
 
-        if opt_loss == 0:
-            print("opt_loss is zero!! ")
+        # if opt_loss == 0:
+        #     print("opt_loss is zero!! ")
         # print("lm_loss:", lm_loss, "kg_loss", kg_loss, "opt_loss", opt_loss)
 
         if self.args.n_gpu > 1:
