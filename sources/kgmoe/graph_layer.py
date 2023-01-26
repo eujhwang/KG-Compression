@@ -39,13 +39,15 @@ class GraphEncoder(nn.Module):
         # self.gcn_att = DenseGCNConv(embed_size, 1, bias=True)
         self.lin = Linear(embed_size, 1, bias=False)
         self.bias = Parameter(torch.Tensor(1))
-        self.reset_parameters()
 
         self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
-        self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=False)
+        self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
+        self.reset_parameters()
 
     def reset_parameters(self):
         self.lin.reset_parameters()
+        self.score_layer.reset_parameters()
+        self.node_linear.reset_parameters()
 
     def normalize_batch_adj(self, adj):  # adj shape: batch_size * num_node * num_node, D^{-1/2} (A+I) D^{-1/2}
         dim = adj.size()[1]
@@ -118,7 +120,7 @@ class GraphEncoder(nn.Module):
 
             perm = topk(score, self.assign_ratio, label)
             # score contains lots of negative values, so relu zero out most of them
-            _xi = xi[perm] * torch.tanh(score[perm]).view(-1, 1)
+            _xi = xi[perm] * F.sigmoid(torch.pow(score[perm], 2)).view(-1, 1)
             new_xi = torch.zeros(xi.shape, device=x.device)
             new_xi[perm] = _xi
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))

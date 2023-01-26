@@ -202,7 +202,6 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             if loss.item() == 0:
                 print("mem:", mem.shape, mem)
                 print("new_mem:", new_mem.shape, new_mem)
-                assert False
             
             opt_losses.append(loss.item())
         if len(opt_losses) > 0:
