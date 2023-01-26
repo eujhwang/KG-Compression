@@ -120,7 +120,8 @@ class GraphEncoder(nn.Module):
 
             perm = topk(score, self.assign_ratio, label)
             # score contains lots of negative values, so relu zero out most of them
-            _xi = xi[perm] * F.sigmoid(torch.pow(score[perm], 2)).view(-1, 1)
+            score = F.sigmoid(torch.pow(score[perm], 2)) + 0.0000001
+            _xi = xi[perm] * score.view(-1, 1)
             new_xi = torch.zeros(xi.shape, device=x.device)
             new_xi[perm] = _xi
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
