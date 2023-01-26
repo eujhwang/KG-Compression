@@ -199,7 +199,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             if new_mem.shape[0] == 0: continue
             loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
 
-            if loss == 0:
+            if loss.item() == 0:
                 print("mem:", mem.shape, mem)
                 print("new_mem:", new_mem.shape, new_mem)
                 assert False
