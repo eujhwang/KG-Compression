@@ -37,11 +37,9 @@ class Bleu:
             bleu_scorer += (hypo[0], ref)
 
         score, scores = bleu_scorer.compute_score(option='closest', verbose=0)
-        score1, scores1 = bleu_scorer.compute_score(option='shortest')
-        score2, scores2 = bleu_scorer.compute_score(option='average', verbose=1)
         print("closest:", score, scores)
-        print("shortest:", score1, scores1)
-        print("average:", score2, scores2)
+        print("shortest:", bleu_scorer.compute_score(option='shortest'))
+        print("average:", bleu_scorer.compute_score(option='average', verbose=1))
         # return (bleu, bleu_info)
         return score, scores
 
