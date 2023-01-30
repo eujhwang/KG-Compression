@@ -1,16 +1,30 @@
-import json
-import sys
-from tqdm import tqdm
-import spacy
-from scipy import spatial
 import configparser
 import networkx as nx
+import itertools
+import math
+import random
+import json
+from tqdm import tqdm
+import sys
+import time
+import timeit
+import numpy as np
+import torch
+from collections import Counter
+import spacy
+from scipy import spatial
+import sys
 
 config = configparser.ConfigParser()
 config.read("paths.cfg")
 
-cpnet, cpnet_simple, concept2id = None, None, None
-relation2id, id2relation, id2concept = None, None, None
+cpnet = None
+cpnet_simple = None
+concept2id = None
+relation2id = None
+id2relation = None
+id2concept = None
+
 nlp = spacy.load('en_core_web_sm', disable=['ner', 'parser', 'textcat'])
 
 def load_resources():
@@ -34,7 +48,7 @@ def load_resources():
 
 
 def load_cpnet():
-    global cpnet,concept2id, relation2id, id2relation, id2concept, cpnet_simple
+    global cpnet, concept2id, relation2id, id2relation, id2concept, cpnet_simple
     print("loading cpnet....")
     cpnet = nx.read_gpickle(config["paths"]["conceptnet_en_graph"])
     print("Done")
@@ -54,30 +68,30 @@ def get_edge(src_concept, tgt_concept):
         return list(set([rel_list[item]["rel"] for item in rel_list]))
     except:
         return []
-    
+
 
 def cosine_score_triple(h, t, r):
     global concept_embs, relation_embs
     if r < 17:
-        return (1 + 1 - spatial.distance.cosine(relation_embs[r], concept_embs[t] - concept_embs[h]) ) /2
+        return (1 + 1 - spatial.distance.cosine(relation_embs[r], concept_embs[t] - concept_embs[h])) / 2
     else:
-        return (1 + 1 - spatial.distance.cosine(relation_embs[r - 17], concept_embs[h] - concept_embs[t]) ) /2
+        return (1 + 1 - spatial.distance.cosine(relation_embs[r - 17], concept_embs[h] - concept_embs[t])) / 2
 
 
 def find_neighbours_frequency(source_sentence, source_concepts, target_concepts, T, max_B=100):
     global cpnet, concept2id, relation2id, id2relation, id2concept, cpnet_simple, total_concepts_id
     source = [concept2id[s_cpt] for s_cpt in source_concepts]
     start = source
-    Vts = dict([(x,0) for x in start])
+    Vts = dict([(x, 0) for x in start])
     Ets = {}
     total_concepts_id_set = set(total_concepts_id)
     for t in range(T):
         V = {}
+        templates = []
         for s in start:
             if s in cpnet_simple:
                 for n in cpnet_simple[s]:
-                    # if n is one of the source nodes and exists in conceptNet
-                    if n not in Vts and n in total_concepts_id_set:
+                    if n not in Vts and n in total_concepts_id_set: # if n is one of the source nodes and exists in conceptNet
                         if n not in Vts:
                             if n not in V:
                                 V[n] = 1
@@ -87,19 +101,18 @@ def find_neighbours_frequency(source_sentence, source_concepts, target_concepts,
                         if n not in Ets:
                             rels = get_edge(s, n)
                             if len(rels) > 0:
-                                Ets[n] = {s: rels}  
+                                Ets[n] = {s: rels}
                         else:
                             rels = get_edge(s, n)
                             if len(rels) > 0:
-                                Ets[n].update({s: rels})  
-                        
-        
+                                Ets[n].update({s: rels})
+
         V = list(V.items())
         count_V = sorted(V, key=lambda x: x[1], reverse=True)[:max_B]
         start = [x[0] for x in count_V if x[0] in total_concepts_id_set]
-        
-        Vts.update(dict([(x, t+1) for x in start]))
-    
+
+        Vts.update(dict([(x, t + 1) for x in start]))
+
     _concepts = list(Vts.keys())
     _distances = list(Vts.values())
     concepts = []
@@ -107,32 +120,30 @@ def find_neighbours_frequency(source_sentence, source_concepts, target_concepts,
     for c, d in zip(_concepts, _distances):
         concepts.append(c)
         distances.append(d)
-    assert(len(concepts) == len(distances))
-    
-    
+    assert (len(concepts) == len(distances))
+
     triples = []
     for v, N in Ets.items():
         if v in concepts:
             for u, rels in N.items():
                 if u in concepts:
                     triples.append((u, rels, v))
-    
 
     ts = [concept2id[t_cpt] for t_cpt in target_concepts]
 
     labels = []
     found_num = 0
     for c in concepts:
-        if c in ts: # if the concept in the subgraph is target concept, then label is 1, otherwise 0
+        if c in ts:
             found_num += 1
             labels.append(1)
         else:
             labels.append(0)
-    
-    res = [id2concept[x].replace("_", " ") for x in concepts]
-    triples = [(id2concept[x].replace("_", " "), y, id2concept[z].replace("_", " ")) for (x,y,z) in triples]
 
-    return {"concepts":res, "labels":labels, "distances":distances, "triples":triples}, found_num, len(res)
+    res = [id2concept[x].replace("_", " ") for x in concepts]
+    triples = [(id2concept[x].replace("_", " "), y, id2concept[z].replace("_", " ")) for (x, y, z) in triples]
+
+    return {"concepts": res, "labels": labels, "distances": distances, "triples": triples}, found_num, len(res)
 
 def process(input_path, output_path, T, max_B):
     data = []
@@ -144,23 +155,24 @@ def process(input_path, output_path, T, max_B):
     for ex in tqdm(data):
         target = ex['ac']
         source = ex['qc']
-        
-        e, _, avg_nodes = find_neighbours_frequency(ex['sent'], source, target, T, max_B)
+
+        e, found, avg_nodes = find_neighbours_frequency(ex['sent'], source, target, T, max_B)
         avg_len += avg_nodes
         examples.append(e)
-        
+
     print('{} hops avg nodes: {}'.format(T, avg_len / len(examples)))
-    
+
     with open(output_path, 'w') as f:
         for line in examples:
-            json.dump(line ,f)
+            json.dump(line, f)
             f.write('\n')
 
 
-def load_total_concepts(data_path):    
+def load_total_concepts(data_path):
     global concept2id, total_concepts_id, config
     total_concepts = []
     total_concepts_id = []
+    exs = []
     for path in [data_path + "/train.concepts_nv.json", data_path + "/val.concepts_nv.json"]:
         with open(path, 'r') as f:
             for line in f.readlines():
@@ -175,10 +187,10 @@ def load_total_concepts(data_path):
             total_concepts_id.append(concept2id[x])
             filtered_total_conncepts.append(x)
 
-    with open(data_path + "/kg_vocab.txt", 'w') as f:
+    with open(data_path + "/total_concepts.txt", 'w') as f:
         for line in filtered_total_conncepts:
             f.write(str(line) + '\n')
-    
+
 if __name__ == "__main__":
     dataset = sys.argv[1]
 
@@ -189,6 +201,6 @@ if __name__ == "__main__":
     load_cpnet()
     load_total_concepts(DATA_PATH)
 
-    process(DATA_PATH + "/train.concepts_nv.json", DATA_PATH + "/train.{}hops_{}_triple.json".format(T, max_B), T, max_B)
-    process(DATA_PATH + "/val.concepts_nv.json", DATA_PATH + "/val.{}hops_{}_triple.json".format(T, max_B), T, max_B)
-    process(DATA_PATH + "/test.concepts_nv.json", DATA_PATH + "/test.{}hops_{}_triple.json".format(T, max_B), T, max_B)
+    for TYPE in ['train', 'val', 'test']:
+        process(DATA_PATH + "/{}.concepts_nv.json".format(TYPE),
+                DATA_PATH + "/{}.{}hops_{}_triple.json".format(TYPE, T, max_B), T, max_B)
