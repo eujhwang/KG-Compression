@@ -239,12 +239,31 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         tail_ids = self.tail_ids[index]
         triple_labels = self.triple_labels[index]
 
+        assert len(head_ids) == len(tail_ids) == len(relations) == len(triple_labels)
+        ######################## new ########################
+        new_head_ids, new_tail_ids, new_rel_ids, new_triple_lbls = [], [], [], []
+        for head_id, relation, tail_id, triple_lbl in zip(head_ids, relations, tail_ids, triple_labels):
+            for rel in relation:
+                new_head_ids.append(head_id)
+                new_rel_ids.append(rel)
+                new_tail_ids.append(tail_id)
+                new_triple_lbls.append(triple_lbl)
+
+        head_ids = new_head_ids
+        tail_ids = new_tail_ids
+        relations = new_rel_ids
+        triple_labels = new_triple_lbls
+        ######################## new ########################
+
+        ######################## old ########################
         # FIXME: we should address all relations, not just taking random one relation out of all relations
-        relations = [x[0] for x in relations] # taking only one relation out of many relations
+        # relations = [x[0] for x in relations] # taking only one relation out of many relations
         # concept: 202 cpt_label: 202 dist: 202 relations: 608 head_ids: 608 tail_ids: 608 triple_labels: 608 relations: 608
-        # print("concept:", len(concept), "cpt_label:", len(cpt_label), "dist:", len(dist), "relations:", len(relations),
-        #       "head_ids:", len(head_ids), "tail_ids:", len(tail_ids), "triple_labels:", len(triple_labels), "relations:", len(relations))
-        # print()
+        ######################## old ########################
+
+        # print("head_ids:", len(head_ids), "new_head_ids:", len(new_head_ids), new_head_ids)
+        # print("tail_ids:", len(tail_ids), "new_tail_ids:", len(new_tail_ids), new_tail_ids)
+        # print("relations:", len(relations), "new_relations:", len(new_rel_ids), new_rel_ids)
 
         _concept = concept.copy()
         _cpt_label = cpt_label.copy()
@@ -258,7 +277,7 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
 
         max_concept_length = 300
         max_oracle_concept_length = 30
-        max_triple_len = 600
+        max_triple_len = 900
 
         _concept_ids, _concept_labels, _concept_distances = self.encode_concept(
             self.concept2id, _concept, _cpt_label, _dist, max_concept_length)
