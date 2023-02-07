@@ -4,13 +4,9 @@ from torch.nn import Parameter, Linear
 from torch_geometric.nn.pool.topk_pool import topk, filter_adj
 from torch_scatter import scatter_max, scatter_mean, scatter_add
 import torch.nn.functional as F
-from torch_geometric.nn import global_mean_pool, global_max_pool
 
 from trainers.kgtrainer_utils import sinkhorn_loss_default
-
-
 from torch_geometric.nn import DenseGCNConv, GCNConv
-# from torch_geometric.nn.dense.linear import Linear
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,

@@ -150,6 +150,8 @@ def main():
     # n_sample for evluating the models during training
     training_args.eval_beams = data_args.eval_beams
     training_args.data_dir = data_args.data_dir
+    if data_args.use_wandb:
+        training_args.output_dir = "_".join([training_args.output_dir, wandb.run.id])
 
     # Ensure output dir is not existed
     if (
