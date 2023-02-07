@@ -97,7 +97,7 @@ class Seq2SeqTrainer(Trainer):
         if self.args.label_smoothing == 0:
             loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.config.pad_token_id)
             assert logits.shape[-1] == self.vocab_size
-            loss = loss_fct(logits.view(-1, logits.shape[-1]), labels.view(-1))
+            loss = loss_fct(logits.view(-1, logits.shape[-1]), labels.view(-1)) # logits: [16, 23, 50265], labels: [16, 23]
         else:
             lprobs = torch.nn.functional.log_softmax(logits, dim=-1)
             loss, _ = label_smoothed_nll_loss(
