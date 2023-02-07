@@ -36,7 +36,8 @@ class GraphEncoder(nn.Module):
         self.lin = Linear(embed_size, 1, bias=False)
         self.bias = Parameter(torch.Tensor(1))
 
-        self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
+        # self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
+        self.score_layer = GCNConv(embed_size, 1)
         self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
         self.reset_parameters()
 
@@ -98,7 +99,7 @@ class GraphEncoder(nn.Module):
         # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
         return embedding_tensor, new_adj
 
-    def sag_pooling(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, adj):
+    def sag_pooling(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, concept_labels, concept_ids):
         bsz = head.size(0)  # batch_size 4
         # mem_t = head.size(1)  # max_triple_len 600
         mem = concept_hidden.size(1)  # max_concept_length 300
@@ -108,6 +109,8 @@ class GraphEncoder(nn.Module):
         x = concept_hidden
 
         new_Xs = []
+        new_concept_labels = []
+        new_concept_ids = []
         for i in range(bsz):
             xi = x[i]
             edge_index = torch.stack([head[i, :], tail[i, :]], dim=1).T
@@ -116,16 +119,25 @@ class GraphEncoder(nn.Module):
 
             perm = topk(score, self.assign_ratio, label)
             # score contains lots of negative values, so relu zero out most of them
-            score = F.sigmoid(torch.pow(score[perm], 2)) + 0.0000001
+            # score = torch.sigmoid(torch.pow(score[perm], 2)) + 0.0000001
+            score = torch.tanh(score[perm])
             _xi = xi[perm] * score.view(-1, 1)
-            new_xi = torch.zeros(xi.shape, device=x.device)
-            new_xi[perm] = _xi
+
+            concept_label = concept_labels[i, perm]
+            concept_id = concept_ids[i, perm]
+            # new_xi = torch.zeros(xi.shape, device=x.device)
+            # new_xi[perm] = _xi
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
 
-            new_xi = self.node_linear(new_xi)
-            new_Xs.append(new_xi)
+            # new_xi = self.node_linear(new_xi)
+            new_Xs.append(_xi)
+            new_concept_labels.append(concept_label)
+            new_concept_ids.append(concept_id)
+
         node_repr = torch.stack(new_Xs, dim=0).to(x.device)
-        return node_repr
+        concept_labels = torch.stack(new_concept_labels, dim=0).to(x.device)
+        concept_ids = torch.stack(new_concept_ids, dim=0).to(x.device)
+        return node_repr, concept_labels, concept_ids
 
     def multi_layer_comp_gcn(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
@@ -166,69 +178,6 @@ class GraphEncoder(nn.Module):
         update_node = act(update_node)
 
         return update_node, self.W_r[layer_idx](relation_hidden)
-
-    def multi_layer_gcn2(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_number=2):
-        for i in range(layer_number):
-            concept_hidden = self.gcn2(concept_hidden, relation_hidden, head, tail, triple_label, i)
-        return concept_hidden
-
-    def gcn2(self, concept_hidden, relation_hidden, head, tail, triple_label, layer_idx):
-        '''
-        concept_hidden: bsz x mem x hidden
-        relation_hidden: bsz x mem_t x hidden
-        '''
-        # print("adj:", adj.shape, adj)
-        bsz = head.size(0)      # batch_size 4
-        mem_t = head.size(1)    # max_triple_len 600
-        mem = concept_hidden.size(1) # max_concept_length 300
-        hidden_size = concept_hidden.size(2) # concept hidden size 768
-        # concept_hidden (180, 300, 768)
-        update_node = torch.zeros_like(concept_hidden).to(concept_hidden.device).float() # [4, 300, 768]
-        # count_out = torch.zeros(bsz, mem).to(adj.device).float()
-
-        # for i in range(bsz):
-        #     head = adj[i].nonzero()[:, 0]
-        #     tail = adj[i].nonzero()[:, 1]
-        #
-        #     count = torch.ones_like(head).to(head.device).float()
-        #
-        #     o = concept_hidden[i].gather(0, head.unsqueeze(-1).expand(head.shape[0], hidden_size)) # [b, # of head noes, d] [60, 89, 768]
-        #     scatter_add(o, tail, dim=0, out=update_node[i])
-        #     scatter_add(count, tail, dim=0, out=count_out[i])
-        #
-        #     o = concept_hidden[i].gather(0, tail.unsqueeze(-1).expand(tail.shape[0], hidden_size))
-        #     scatter_add(o, head, dim=0, out=update_node[i])
-        #     scatter_add(count, head, dim=0, out=count_out[i])
-        # act = nn.ReLU()
-        # update_node = self.W_s[layer_idx](concept_hidden) + self.W_n[layer_idx](update_node) / count_out.clamp(min=1).unsqueeze(2)
-        # update_node = act(update_node)
-
-        # print("update_node:", update_node.shape, update_node)
-        count = torch.ones_like(head).to(head.device).masked_fill_(head == -1, 0).float() # [4, 600]
-        count_out = torch.zeros((concept_hidden.shape[0], concept_hidden.shape[1])).to(head.device).float() # [4, 300]
-
-        # head [4, 600], tail [4, 600]
-        _head = head.unsqueeze(2)
-        _tail = tail.unsqueeze(2)
-        _head = _head.masked_fill(head.unsqueeze(2) == -1, 0)
-        _tail = _tail.masked_fill(tail.unsqueeze(2) == -1, 0)
-
-        o = concept_hidden.gather(1, _head.expand(bsz, mem_t, hidden_size))
-        o = o.masked_fill(head.unsqueeze(2) == -1, 0)
-        scatter_add(o, _tail.squeeze(2), dim=1, out=update_node)
-        scatter_add(count, _tail.squeeze(2), dim=1, out=count_out)
-
-        o = concept_hidden.gather(1, _tail.expand(bsz, mem_t, hidden_size))
-        o = o.masked_fill(tail.unsqueeze(2) == -1, 0)
-        scatter_add(o, _head.squeeze(2), dim=1, out=update_node)
-        scatter_add(count, _head.squeeze(2), dim=1, out=count_out)
-        # print("concept_hidden:", concept_hidden.shape, "head:", head.shape, "update_node:", update_node.shape, "count_out:", count_out.shape)
-        act = nn.ReLU()
-        update_node = self.W_s[layer_idx](concept_hidden) + self.W_n[layer_idx](update_node) / count_out.clamp(min=1).unsqueeze(2)
-        update_node = act(update_node)
-
-        # return update_node, self.W_r[layer_idx](relation_hidden)
-        return update_node
 
     def multi_layer_gcn(self, concept_hidden, head, tail, triple_label, layer_number=2):
         for i in range(layer_number):
@@ -310,7 +259,7 @@ class GraphEncoder(nn.Module):
         # bsz x L x mem
         return total_concept_prob
 
-    def forward(self, concept_ids, distance, head, tail, relation, triple_label, mixture_ids=None, adj=None):
+    def forward(self, concept_ids, distance, head, tail, relation, triple_label, mixture_ids=None, concept_labels=None):
         
         memory = self.embed_word(concept_ids)
         rel_repr = self.relation_embed(relation)
@@ -322,12 +271,16 @@ class GraphEncoder(nn.Module):
         ###################################### start of sag_pooling ######################################
         concept_hidden = memory
         relation_hidden = rel_repr
-        concept_hidden_list = [memory]
+        # concept_hidden_list = [memory]
+        _concept_hidden = memory
         for i in range(self.hop_number):
             concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
-            concept_hidden_list.append(concept_hidden)
-        node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device) # [bsz, #concepts, 768 * num_hop]
-        node_repr = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, adj)
+            _concept_hidden = _concept_hidden + concept_hidden
+        # node_repr = torch.sum(concept_hidden_list, dim=-1).to(memory.device) # [bsz, #concepts, 768 * num_hop]
+        node_repr = _concept_hidden
+        node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, concept_labels, concept_ids)
+        # print("node_repr:", node_repr.shape, node_repr)
+        # print("concept_labels:", concept_labels.shape, concept_labels)
         ###################################### end of sag_pooling ######################################
 
         ###################################### start of Coarsening ######################################
@@ -372,7 +325,8 @@ class GraphEncoder(nn.Module):
         # triple_repr = torch.cat((head_repr, rel_repr, tail_repr), dim=-1)
         ###################################### end of original ######################################
 
-        return node_repr.to(memory.device), memory
+        # concept_ids is needed for generating step.
+        return node_repr.to(memory.device), memory, concept_labels, concept_ids
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 

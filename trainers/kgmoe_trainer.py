@@ -134,22 +134,23 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
     def compute_loss(self, model, inputs):
         # labels=target_ids, concept_labels (if label in source subgraph is one of target concpets)
         lm_labels = inputs.pop("labels")
-        kg_labels = inputs.pop("concept_labels")
-        lm_outputs, kg_logits, kg_outputs, kg_hidden = model(**inputs, use_cache=False)
+        # kg_labels = inputs.pop("concept_labels")
+        lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels = model(**inputs, use_cache=False)
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        opt_loss = self._compute_opt_loss(kg_outputs, kg_hidden, model.device)
+        opt_loss = self._compute_opt_loss(kg_hidden, kg_outputs, model.device)
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
         
         _inputs = inputs.copy()
         _lm_labels = _inputs.pop("labels")
-        _kg_labels = _inputs.pop("concept_labels")
-        lm_outputs, kg_logits, kg_outputs, kg_hidden = model(**_inputs, use_cache=False)
+        # _kg_labels = _inputs.pop("concept_labels")
+        # _kg_labels = _inputs["concept_labels"]
+        lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels = model(**_inputs, use_cache=False)
         lm_logits = lm_outputs[0]
-        mixture_ids = self._compute_mixture_loss(lm_logits, kg_logits, _lm_labels, _kg_labels)
+        mixture_ids = self._compute_mixture_loss(lm_logits, kg_logits, _lm_labels, kg_labels)
         return mixture_ids
 
     def _compute_mixture_loss(self, lm_logits, kg_logits, lm_labels, kg_labels):
@@ -192,6 +193,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         opt_losses = []
         epsilon = 1.0
         opt_epochs = 10
+        # node_hidden: [16, 210, 768], node_output: [16, 300, 768]
         for i in range(len(node_output)):
             mem = self.get_nonzero_rows(node_output[i])
             new_mem = self.get_nonzero_rows(node_hidden[i])
@@ -200,8 +202,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
 
             if loss.item() == 0:
-                print("mem:", mem.shape, mem)
-                print("new_mem:", new_mem.shape, new_mem)
+                print("opt loss is 0!!\n>>> mem:", mem.shape, mem)
+                print(">>> new_mem:", new_mem.shape, new_mem)
             
             opt_losses.append(loss.item())
         if len(opt_losses) > 0:
@@ -257,7 +259,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                 generated_tokens = self._pad_tensors_to_max_len(generated_tokens, self.max_gen_length)
 
             lm_labels = inputs.get("labels")
-            lm_outputs, _, _, _ = model(**inputs, use_cache=False)
+            lm_outputs, _, _, _, _ = model(**inputs, use_cache=False)
             # TODO: not sure why computing loss here
             # loss = self._compute_loss(lm_outputs[0], lm_labels)
             # loss = loss.mean().item()

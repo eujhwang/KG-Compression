@@ -141,7 +141,7 @@ class BartMoEModel(PretrainedBartModel):
                 return_dict=return_dict,
             )
 
-            concept_outputs, concept_hidden = self.gnn(
+            concept_outputs, concept_hidden, concept_labels, concept_ids = self.gnn(
                 concept_ids=concept_ids, 
                 distance=concept_distances, 
                 head=head_ids, 
@@ -149,7 +149,7 @@ class BartMoEModel(PretrainedBartModel):
                 relation=relation_ids, 
                 triple_label=triple_labels,
                 mixture_ids=kg_mixture_ids,
-                adj=adj,
+                concept_labels=concept_labels,
             )
         # If the user passed a tuple for encoder_outputs, we wrap it in a BaseModelOuput when return_dict=False
         elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
@@ -174,7 +174,7 @@ class BartMoEModel(PretrainedBartModel):
         )
 
         if not return_dict:
-            return decoder_outputs + encoder_outputs, concept_outputs, concept_hidden
+            return decoder_outputs + encoder_outputs, concept_outputs, concept_hidden, concept_labels, concept_ids
 
         output_dict = Seq2SeqModelOutput(
             last_hidden_state=decoder_outputs.last_hidden_state,
@@ -185,7 +185,7 @@ class BartMoEModel(PretrainedBartModel):
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
         )
-        return output_dict, None, None
+        return output_dict, None, None, None, None
 
     def get_input_embeddings(self):
         return self.shared
@@ -372,7 +372,7 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
                 decoder_input_ids = shift_tokens_right(lm_labels, self.config.pad_token_id)
 
         # decoder_outputs + encoder_outputs, concept_outputs
-        lm_outputs, kg_outputs, kg_hidden = self.model(
+        lm_outputs, kg_outputs, kg_hidden, kg_labels, concept_ids = self.model(
             input_ids,
             lm_mixture_ids=lm_mixture_ids,
             attention_mask=attention_mask,
@@ -407,9 +407,9 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
             lm_output = (lm_logits, lm_outputs[-1]) + lm_outputs[1: -1] # training only this output
             kg_logits = self._calculate_kg_logits(kg_outputs)
             if masked_lm_loss is not None:
-                return ((masked_lm_loss,) + lm_output), kg_logits, kg_outputs, kg_hidden
+                return ((masked_lm_loss,) + lm_output), kg_logits, kg_outputs, kg_hidden, kg_labels
             else:
-                return lm_output, kg_logits, kg_outputs, kg_hidden
+                return lm_output, kg_logits, kg_outputs, kg_hidden, kg_labels
 
         return Seq2SeqLMOutput(
             loss=masked_lm_loss,
@@ -651,17 +651,17 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
 
             input_ids = self.repeat(input_ids, num_beams)
             attention_mask = self.repeat(attention_mask, num_beams)
-            adj = self.repeat(adj, num_beams)
+            # adj = self.repeat(adj, num_beams)
 
             mixture_tmp = torch.arange(num_beams, dtype=torch.long, device=input_ids.device).view(
                     num_beams, 1).repeat(_batch_size, 1)
             kg_mixture_ids = mixture_tmp.expand(concept_ids.shape)
-            concept_outputs, concept_hidden = graph_encoder(concept_ids, distance=concept_distances,
+            concept_outputs, concept_hidden, concept_labels, concept_ids = graph_encoder(concept_ids, distance=concept_distances,
                 head=head_ids, tail=tail_ids, relation=relation_ids, 
-                triple_label=triple_labels, mixture_ids=kg_mixture_ids, adj=adj)
+                triple_label=triple_labels, mixture_ids=kg_mixture_ids, concept_labels=concept_labels)
 
             kg_logits = self._calculate_kg_logits(concept_outputs)
-            
+
             kg_logits = kg_logits.masked_fill(concept_ids == self.config.pad_token_id, float('-inf'))
             kg_logits = F.softmax(kg_logits, dim=1)
 
