@@ -271,14 +271,17 @@ class GraphEncoder(nn.Module):
         ###################################### start of sag_pooling ######################################
         concept_hidden = memory
         relation_hidden = rel_repr
-        # concept_hidden_list = [memory]
-        _concept_hidden = memory
+        concept_hidden_list = [memory]
+        # _concept_hidden = memory
         for i in range(self.hop_number):
             concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
-            _concept_hidden = _concept_hidden + concept_hidden
-        # node_repr = torch.sum(concept_hidden_list, dim=-1).to(memory.device) # [bsz, #concepts, 768 * num_hop]
-        node_repr = _concept_hidden
-        node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation, triple_label, concept_labels, concept_ids)
+            # _concept_hidden = _concept_hidden + concept_hidden
+            concept_hidden_list.append(concept_hidden)
+        node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
+        node_repr = self.node_linear(node_repr)
+        # node_repr = concept_hidden
+        node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
+                                                                  triple_label, concept_labels, concept_ids)
         # print("node_repr:", node_repr.shape, node_repr)
         # print("concept_labels:", concept_labels.shape, concept_labels)
         ###################################### end of sag_pooling ######################################

@@ -63,16 +63,19 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
     def _training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], optimizer) -> torch.Tensor:
 
-        self.B, self.L = inputs['labels'].shape # target_ids
-        self.BC, self.LC = inputs['concept_labels'].shape # concept_labels
+        self.B, self.L = inputs['labels'].shape  # target_ids
+        self.BC, self.LC = inputs['concept_labels'].shape  # concept_labels
         assert self.B == self.BC
         self.pad_mask = (inputs['labels'] == self.config.pad_token_id).view(self.B, 1, self.L).to(self.args.device)
-        self.concept_pad_mask = (inputs['concept_labels'] == self.config.pad_token_id).view(self.BC, 1, self.LC).to(self.args.device)
+        self.concept_pad_mask = (inputs['concept_labels'] == self.config.pad_token_id).view(self.BC, 1, self.LC).to(
+            self.args.device)
 
-        inputs = self._prepare_inputs(inputs) # move tensors to gpu
+        inputs = self._prepare_inputs(inputs)  # move tensors to gpu
 
-        mixture_tmp = torch.arange(self.mixtures, dtype=torch.long, device=inputs['input_ids'].device).view(self.mixtures, 1) # [2, 1] [[0], [1]]
-        kg_mixture_ids = mixture_tmp.repeat(inputs['concept_ids'].shape) # [120, 300] [[0, 0, 0, ..., 0], [1, 1, 1, ..., 1], ..., [0, 0, 0, ..., 0], [1, 1, 1, ..., 1]]
+        mixture_tmp = torch.arange(self.mixtures, dtype=torch.long, device=inputs['input_ids'].device).view(
+            self.mixtures, 1)  # [2, 1] [[0], [1]]
+        kg_mixture_ids = mixture_tmp.repeat(inputs[
+                                                'concept_ids'].shape)  # [120, 300] [[0, 0, 0, ..., 0], [1, 1, 1, ..., 1], ..., [0, 0, 0, ..., 0], [1, 1, 1, ..., 1]]
 
         if self.mixture_embedding:
 
@@ -86,7 +89,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             inputs['lm_mixture_ids'] = mixture_ids.expand(inputs['input_ids'].shape)
             inputs['kg_mixture_ids'] = mixture_ids.expand(inputs['concept_ids'].shape)
 
-        else: # using prompt as different expert
+        else:  # using prompt as different expert
 
             mixture_ids_prompt = self.expert_prompt.repeat(self.B, 1).to(self.args.device)
             mixture_att_prompt = torch.full(mixture_ids_prompt.shape, 1).to(self.args.device)
@@ -105,11 +108,13 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             inputs['kg_mixture_ids'] = mixture_ids.expand(inputs['concept_ids'].shape)
             inputs['input_ids'] = torch.cat([input_ids_prompt, inputs['input_ids']], dim=1)
             inputs['attention_mask'] = torch.cat([attention_prompt, inputs['attention_mask']], dim=1)
-            
+
         # do the expert training!
         model.train()
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
         loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
+
+        assert torch.isnan(loss).item() == False
 
         # if opt_loss == 0:
         #     print("opt_loss is zero!! ")
@@ -157,10 +162,11 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # lm_logits & lm_labels: [180, 27] (decoder_dim), kg_logits & kg_labels: [180, 300]
         assert lm_logits.shape[:2] == lm_labels.shape
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction='none')
-        
-        lm_loss = loss_fct(lm_logits.view(-1, lm_logits.shape[-1]), lm_labels.view(-1)).reshape(self.B, self.mixtures, self.L)
+
+        lm_loss = loss_fct(lm_logits.view(-1, lm_logits.shape[-1]), lm_labels.view(-1)).reshape(self.B, self.mixtures,
+                                                                                                self.L)
         lm_loss = lm_loss.masked_fill(self.pad_mask, 0).sum(dim=2)
-        
+
         # kg_loss = self._compute_kg_loss(kg_logits, kg_labels, reduction='none').view(self.BC, self.mixtures, self.LC)
         # kg_loss = kg_loss.masked_fill(self.concept_pad_mask, 0).sum(dim=2)
 
@@ -169,24 +175,25 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         return mixture_ids
 
     def _compute_kg_loss(self, node_logits, node_labels, reduction='mean'):
-        
+
         loss_weights = (node_labels + 1).pow(self.pows)
 
         if node_logits.shape != node_labels.shape:
             node_logits = node_logits[:, : node_labels.shape[-1]]
-        
+
         node_loss = F.binary_cross_entropy_with_logits(
-            node_logits.float(), node_labels.float(), 
+            node_logits.float(), node_labels.float(),
             weight=loss_weights, reduction='none')
-        
+
         valid_mask = ~(node_labels == -1)
         labels_len = valid_mask.float().sum(dim=1)
+        labels_len = labels_len.masked_fill(labels_len == 0.0, 1.0)
 
         if reduction == 'mean':
             _node_loss = node_loss.sum(dim=1) / labels_len
             _node_loss = _node_loss.mean()
             return _node_loss
-        
+
         return node_loss
 
     def _compute_opt_loss(self, node_output, node_hidden, device):
@@ -204,10 +211,10 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             if loss.item() == 0:
                 print("opt loss is 0!!\n>>> mem:", mem.shape, mem)
                 print(">>> new_mem:", new_mem.shape, new_mem)
-            
+
             opt_losses.append(loss.item())
         if len(opt_losses) > 0:
-            final_loss = sum(opt_losses)/len(opt_losses)
+            final_loss = sum(opt_losses) / len(opt_losses)
         else:
             final_loss = 0.0
         assert final_loss != 0
@@ -221,12 +228,11 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         return M[MM_ind[:N]]
 
     def prediction_step(
-        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], prediction_loss_only: bool
+            self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], prediction_loss_only: bool
     ) -> Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]:
         inputs = self._prepare_inputs(inputs)
 
         with torch.no_grad():
-
             if self.args.predict_with_generate and not self.args.prediction_loss_only:
                 num_return_sequences = self.data_args.eval_beams if self.data_args.do_sample else None
                 expert_prompt = self.data_args.expert_prompt if hasattr(self.data_args, 'expert_prompt') else None
@@ -267,19 +273,19 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             #     return (loss, None, None)
 
             lm_logits = generated_tokens if self.args.predict_with_generate else lm_outputs[1]
-        
+
         lm_labels = self.repeat(lm_labels, self.data_args.eval_beams)
         lm_labels = self._pad_tensors_to_max_len(lm_labels.detach(), self.max_gen_length)
         return lm_logits, lm_labels
-    
+
     def prediction_loop(
-        self, dataloader: DataLoader, description: str, prediction_loss_only: Optional[bool] = None
+            self, dataloader: DataLoader, description: str, prediction_loss_only: Optional[bool] = None
     ) -> PredictionOutput:
 
         if hasattr(self, "_prediction_loop"):
             warnings.warn(
                 "The `_prediction_loop` method is deprecated and won't be called in a future version, define `prediction_loop` in your subclass.",
-                FutureWarning,)
+                FutureWarning, )
             return self._prediction_loop(dataloader, description, prediction_loss_only=prediction_loss_only)
 
         prediction_loss_only = (
@@ -331,7 +337,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
             label_ids = nested_numpify(label_ids)
 
         assert preds.shape[0] == label_ids.shape[0]
-            
+
         if self.compute_metrics is not None and preds is not None and label_ids is not None:
             metrics = self.compute_metrics(EvalPrediction(predictions=preds, label_ids=label_ids))
         else:

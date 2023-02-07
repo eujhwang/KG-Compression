@@ -152,7 +152,7 @@ def main():
     training_args.data_dir = data_args.data_dir
     if data_args.use_wandb:
         wandb.init(project="mokge", entity="ejhwang-ubc")
-        training_args.output_dir = "_".join([training_args.output_dir, wandb.run.id])
+        training_args.output_dir = "_".join([training_args.output_dir, wandb.run.id, wandb.sweep.id])
 
     # Ensure output dir is not existed
     if (
