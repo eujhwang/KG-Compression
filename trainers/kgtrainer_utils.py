@@ -103,6 +103,7 @@ class AbstractSeq2SeqDataset(Dataset):
         type_path="train",
         n_obs=None,
         prefix="",
+        extend_relation=None,
         **dataset_kwargs
     ):
         super().__init__()
@@ -161,6 +162,7 @@ class AbstractSeq2SeqDataset(Dataset):
         dataset_kwargs.update({"add_prefix_space": True} if isinstance(self.tokenizer, BartTokenizer) else {})
 
         self.train = True if type_path == "train" else False
+        self.extend_relation = extend_relation
 
     def __len__(self):
         return len(self.src_lens)
@@ -240,26 +242,38 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         triple_labels = self.triple_labels[index]
 
         assert len(head_ids) == len(tail_ids) == len(relations) == len(triple_labels)
-        ######################## new ########################
-        new_head_ids, new_tail_ids, new_rel_ids, new_triple_lbls = [], [], [], []
-        for head_id, relation, tail_id, triple_lbl in zip(head_ids, relations, tail_ids, triple_labels):
-            for rel in relation:
-                new_head_ids.append(head_id)
-                new_rel_ids.append(rel)
-                new_tail_ids.append(tail_id)
-                new_triple_lbls.append(triple_lbl)
 
-        head_ids = new_head_ids
-        tail_ids = new_tail_ids
-        relations = new_rel_ids
-        triple_labels = new_triple_lbls
-        ######################## new ########################
+        if self.extend_relation:
+            print("yes extension!!")
+            ######################## new ########################
+            new_head_ids, new_tail_ids, new_rel_ids, new_triple_lbls = [], [], [], []
+            for head_id, relation, tail_id, triple_lbl in zip(head_ids, relations, tail_ids, triple_labels):
+                for rel in relation:
+                    new_head_ids.append(head_id)
+                    new_rel_ids.append(rel)
+                    new_tail_ids.append(tail_id)
+                    new_triple_lbls.append(triple_lbl)
 
-        ######################## old ########################
-        # FIXME: we should address all relations, not just taking random one relation out of all relations
-        # relations = [x[0] for x in relations] # taking only one relation out of many relations
-        # concept: 202 cpt_label: 202 dist: 202 relations: 608 head_ids: 608 tail_ids: 608 triple_labels: 608 relations: 608
-        ######################## old ########################
+            head_ids = new_head_ids
+            tail_ids = new_tail_ids
+            relations = new_rel_ids
+            triple_labels = new_triple_lbls
+
+            max_concept_length = 300
+            max_oracle_concept_length = 30
+            max_triple_len = 850
+            ######################## new ########################
+        else:
+            print("no extension!!")
+            ######################## old ########################
+            # FIXME: we should address all relations, not just taking random one relation out of all relations
+            relations = [x[0] for x in relations] # taking only one relation out of many relations
+            # concept: 202 cpt_label: 202 dist: 202 relations: 608 head_ids: 608 tail_ids: 608 triple_labels: 608 relations: 608
+            
+            max_concept_length = 300
+            max_oracle_concept_length = 30
+            max_triple_len = 600
+            ######################## old ########################
 
         # print("head_ids:", len(head_ids), "new_head_ids:", len(new_head_ids), new_head_ids)
         # print("tail_ids:", len(tail_ids), "new_tail_ids:", len(new_tail_ids), new_tail_ids)
@@ -274,10 +288,6 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         _dist = dist.copy()
 
         assert len(dist) == len(concept)
-
-        max_concept_length = 300
-        max_oracle_concept_length = 30
-        max_triple_len = 900
 
         _concept_ids, _concept_labels, _concept_distances = self.encode_concept(
             self.concept2id, _concept, _cpt_label, _dist, max_concept_length)

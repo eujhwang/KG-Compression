@@ -99,6 +99,7 @@ class DataTrainingArguments:
     kg_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     opt_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
+    extend_relation: Optional[bool] = field(default=False, metadata={"help": "whether to extend relation or not."})
     assign_ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
 
 
@@ -243,6 +244,7 @@ def main():
             max_target_length=data_args.max_target_length,
             max_source_length=data_args.max_source_length,
             prefix=model.config.prefix or "",
+            extend_relation=data_args.extend_relation,
         )
         if training_args.do_train
         else None
@@ -257,6 +259,7 @@ def main():
             max_target_length=data_args.val_max_target_length,
             max_source_length=data_args.max_source_length,
             prefix=model.config.prefix or "",
+            extend_relation=data_args.extend_relation,
         )
         if training_args.do_eval or training_args.evaluation_strategy != EvaluationStrategy.NO
         else None
@@ -271,6 +274,7 @@ def main():
             max_target_length=data_args.test_max_target_length,
             max_source_length=data_args.max_source_length,
             prefix=model.config.prefix or "",
+            extend_relation=data_args.extend_relation,
         )
         if training_args.do_predict
         else None
