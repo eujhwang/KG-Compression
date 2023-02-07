@@ -244,7 +244,6 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         assert len(head_ids) == len(tail_ids) == len(relations) == len(triple_labels)
 
         if self.extend_relation:
-            print("yes extension!!")
             ######################## new ########################
             new_head_ids, new_tail_ids, new_rel_ids, new_triple_lbls = [], [], [], []
             for head_id, relation, tail_id, triple_lbl in zip(head_ids, relations, tail_ids, triple_labels):
@@ -264,7 +263,6 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
             max_triple_len = 850
             ######################## new ########################
         else:
-            print("no extension!!")
             ######################## old ########################
             # FIXME: we should address all relations, not just taking random one relation out of all relations
             relations = [x[0] for x in relations] # taking only one relation out of many relations
