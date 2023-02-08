@@ -104,8 +104,9 @@ class GCNConv(MessagePassing):
         perm = (triple_label == -1).nonzero().shape[0]
 
         if (triple_label == -1).any().item():
+            if perm == triple_label.shape[-1]:
+                print("perm:", perm, "edge_index:", edge_index, "is -1?:", (triple_label == -1).any().item(), edge_index.tolist())
             edge_index = edge_index[:, :-perm]
-            print("perm:", perm, "edge_index:", edge_index, "is -1?:", (triple_label == -1).any().item(), edge_index.tolist())
         assert edge_index.nelement() != 0
 
         if edge_weight is not None:
