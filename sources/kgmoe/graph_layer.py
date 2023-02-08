@@ -10,7 +10,7 @@ from sources.kgmoe.copooling import CoPooling
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
-                 num_mixtures=3, assign_ratio=0.5):
+                 num_mixtures=3, assign_ratio=0.5, batch_size=None):
         super(GraphEncoder, self).__init__()
 
         self.hop_number = hop_number
@@ -39,7 +39,7 @@ class GraphEncoder(nn.Module):
         # self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
         self.score_layer = GCNConv(embed_size, 1, add_self_loops=True)
         self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
-        self.copooling = CoPooling(embed_size=embed_size, K=10, alpha=0.1)
+        self.copooling = CoPooling(batch_size, num_mixtures, embed_size=embed_size, K=10, alpha=0.1)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -281,8 +281,8 @@ class GraphEncoder(nn.Module):
         node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
         node_repr = self.node_linear(node_repr)
 
-        # node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
-        #                                                           triple_label, concept_labels, concept_ids)
+        node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
+                                                                  triple_label, concept_labels, concept_ids)
         ###################################### end of sag_pooling ######################################
 
         ###################################### start of co_pooling ######################################
@@ -295,7 +295,7 @@ class GraphEncoder(nn.Module):
         # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
         # node_repr = self.node_linear(node_repr)
         #
-        self.copooling(concept_hidden, relation_hidden, head, tail, triple_label)
+        # self.copooling(concept_hidden, relation_hidden, head, tail, triple_label)
 
         ###################################### end of co_pooling ######################################
 

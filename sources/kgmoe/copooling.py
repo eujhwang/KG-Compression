@@ -38,14 +38,10 @@ class PageRank(MessagePassing):
             edge_index_i, norm_i = gcn_norm(edge_index=edge_index_i, edge_weight=edge_weight_i, num_nodes=xi.size(0),
                                             add_self_loops=True, dtype=concept_hidden.dtype)
 
-            print("2. edge_index_i:", edge_index_i.shape, edge_index_i)
-            print("2. norm_i:", norm_i.shape, norm_i)
-            assert False
             xi = concept_hidden[i]
             hidden_i = xi * (self.temp[0])
             for k in range(self.K):
                 xi = self.propagate(edge_index_i, x=xi, norm=norm_i)
-                print("xi:", xi.shape, xi)
                 gamma = self.temp[k + 1]
                 hidden_i = hidden_i + gamma * xi
             hiddens.append(hidden_i)
@@ -64,7 +60,7 @@ class GraphAttention(torch.nn.Module):
     nodes_dim = 0  # node dimension/axis
     head_dim = 1  # attention head dimension/axis
 
-    def __init__(self, num_in_features, num_out_features, num_of_heads, dropout_prob=0.6, log_attention_weights=False):
+    def __init__(self, batch_size, num_mixtures, num_in_features, num_out_features, num_of_heads, dropout_prob=0.6, log_attention_weights=False):
         super().__init__()
 
         # Saving these as we'll need them in forward propagation in children layers (imp1/2/3)
@@ -83,8 +79,8 @@ class GraphAttention(torch.nn.Module):
 
         # Basically instead of doing [x, y] (concatenation, x/y are node feature vectors) and dot product with "a"
         # we instead do a dot product between x and "a_left" and y and "a_right" and we sum them up
-        self.scoring_fn_target = nn.Parameter(torch.Tensor(48, 1, num_of_heads, num_out_features))
-        self.scoring_fn_source = nn.Parameter(torch.Tensor(48, 1, num_of_heads, num_out_features))
+        self.scoring_fn_target = nn.Parameter(torch.Tensor(batch_size * num_mixtures, 1, num_of_heads, num_out_features))
+        self.scoring_fn_source = nn.Parameter(torch.Tensor(batch_size * num_mixtures, 1, num_of_heads, num_out_features))
 
         self.init_params()
 
@@ -121,9 +117,7 @@ class GraphAttention(torch.nn.Module):
         # shape = (N, NH, FOUT) * (1, NH, FOUT) -> (N, NH, 1) -> (N, NH) because sum squeezes the last dimension
         # Optimization note: torch.sum() is as performant as .sum() in my experiments
         scores_source = (nodes_features_proj * self.scoring_fn_source).sum(dim=-1) # [48, 300, 1]
-        scores_target = (nodes_features_proj * self.scoring_fn_target).sum(dim=-1) # [48, 300, 1]
-        # print("scores_source:", scores_source.shape, scores_source)
-        # print("scores_target:", scores_target.shape, scores_target)
+        scores_target = (nodes_features_proj * self.scoring_fn_target).sum(dim=-1) # [180, 300, 1, 768] * [180, 1, 1, 768] -> [48, 300, 1]
 
         # edge_index = torch.stack([head, tail], dim=1)
         # We simply copy (lift) the scores for source/target nodes based on the edge index. Instead of preparing all
@@ -153,18 +147,37 @@ class GraphAttention(torch.nn.Module):
 
         return scores_source, scores_target
 
-
-
 class CoPooling(nn.Module):
     # reference for GAT code: https://github.com/PetarV-/GAT
     # reference for generalized pagerank code: https://github.com/jianhao2016/GPRGNN
-    def __init__(self, embed_size, K, alpha):
+    def __init__(self, batch_size, num_mixtures, embed_size, K, alpha):
         super(CoPooling, self).__init__()
         self.pagerank = PageRank(K, alpha)
-        self.graph_attn = GraphAttention(num_in_features=embed_size, num_out_features=embed_size, num_of_heads=1)
+        self.graph_attn = GraphAttention(batch_size=batch_size, num_mixtures=num_mixtures, num_in_features=embed_size,
+                                         num_out_features=embed_size, num_of_heads=1)
 
     def forward(self, concept_hidden, relation_hidden, head, tail, triple_label):
         x_cut = self.pagerank(concept_hidden, relation_hidden, head, tail, triple_label)
-        attn = self.graph_attn(x_cut, head, tail)
+        print("x_cut:", x_cut.shape, x_cut)
+        attn = self.graph_attn(x_cut, head, tail) # [180, 600] edge attention
         print("attn:", attn.shape, attn)
-        assert False
+
+        edge_index = torch.stack([head, tail], dim=1)
+        bsz = head.shape[0]
+
+        for i in range(bsz):
+            triple_label_i = triple_label[i]
+            edge_index_i = edge_index[i]
+
+            if (triple_label_i == -1).any().item():
+                perm = (triple_label_i == -1).nonzero().shape[0]
+                edge_index_i = edge_index_i[:, :-perm]
+                assert edge_index_i.nelement() != 0
+
+            print("edge_index_i:", edge_index_i.shape, edge_index_i)
+            # bsz = head.shape[0]
+            # num_nodes = concept_hidden.shape[1]
+            #
+            # concept_hiddens = []
+            # for i in range(bsz):
+            assert False

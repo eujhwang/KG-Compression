@@ -212,6 +212,9 @@ def main():
         config.mixtures = data_args.mixtures
         config.mixture_embedding = data_args.mixture_embedding
         config.assign_ratio = data_args.assign_ratio
+    assert training_args.per_device_train_batch_size == training_args.per_device_eval_batch_size
+    config.batch_size = training_args.per_device_train_batch_size
+    print("batch_size:", config.batch_size)
 
     model = BartModel.from_pretrained(
         model_args.model_name_or_path,
