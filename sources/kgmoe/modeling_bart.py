@@ -133,9 +133,9 @@ class BartMoEModel(PretrainedBartModel):
 
         if encoder_outputs is None:
             encoder_outputs = self.encoder(
-                input_ids=input_ids,
-                mixture_ids=lm_mixture_ids,
-                attention_mask=attention_mask,
+                input_ids=input_ids, # [180, 100]
+                mixture_ids=lm_mixture_ids, # None
+                attention_mask=attention_mask, # [180, 100]
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
@@ -148,7 +148,7 @@ class BartMoEModel(PretrainedBartModel):
                 tail=tail_ids, 
                 relation=relation_ids, 
                 triple_label=triple_labels,
-                mixture_ids=kg_mixture_ids,
+                mixture_ids=kg_mixture_ids, # [180, 300]
                 concept_labels=concept_labels,
             )
         # If the user passed a tuple for encoder_outputs, we wrap it in a BaseModelOuput when return_dict=False
@@ -250,8 +250,7 @@ class BartEncoder(nn.Module):
     ):
         # check attention mask and invert
         if attention_mask is not None:
-            attention_mask = invert_mask(attention_mask)
-
+            attention_mask = invert_mask(attention_mask) # 1 -> False (0), 0 -> True (1)
         inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
         
         embed_pos = self.embed_positions(input_ids)

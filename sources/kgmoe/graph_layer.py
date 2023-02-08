@@ -282,8 +282,6 @@ class GraphEncoder(nn.Module):
         # node_repr = concept_hidden
         node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
                                                                   triple_label, concept_labels, concept_ids)
-        # print("node_repr:", node_repr.shape, node_repr)
-        # print("concept_labels:", concept_labels.shape, concept_labels)
         ###################################### end of sag_pooling ######################################
 
         ###################################### start of Coarsening ######################################

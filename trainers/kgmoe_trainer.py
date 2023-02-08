@@ -91,8 +91,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
         else:  # using prompt as different expert
 
-            mixture_ids_prompt = self.expert_prompt.repeat(self.B, 1).to(self.args.device)
-            mixture_att_prompt = torch.full(mixture_ids_prompt.shape, 1).to(self.args.device)
+            mixture_ids_prompt = self.expert_prompt.repeat(self.B, 1).to(self.args.device) # [180, 5]
+            mixture_att_prompt = torch.full(mixture_ids_prompt.shape, 1).to(self.args.device) # [180, 5]
 
             mixture_inputs = {k: self.repeat(v, self.mixtures) for k, v in inputs.items()}
             mixture_inputs['kg_mixture_ids'] = kg_mixture_ids
