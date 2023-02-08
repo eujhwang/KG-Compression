@@ -6,7 +6,6 @@ from torch_scatter import scatter_max, scatter_mean, scatter_add
 import torch.nn.functional as F
 
 from sources.kgmoe.gcn_conv import GCNConv
-from sources.kgmoe.pooling_layer import CoPooling
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
