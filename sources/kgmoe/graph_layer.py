@@ -114,7 +114,6 @@ class GraphEncoder(nn.Module):
         for i in range(bsz):
             xi = x[i]
             edge_index = torch.stack([head[i, :], tail[i, :]], dim=1).T
-            print("edge_index:",edge_index.shape,"triple_label[i]:", triple_label[i].shape)
             score = self.score_layer(xi, edge_index.to(x.device), triple_label=triple_label[i]).squeeze()
             label = edge_index.new_zeros(xi.size(0))
 
