@@ -103,8 +103,10 @@ class GCNConv(MessagePassing):
         """"""
         perm = (triple_label == -1).nonzero().shape[0]
 
-        if perm > 0:
+        if (triple_label == -1).any().item():
             edge_index = edge_index[:, :-perm]
+
+        assert edge_index.nelement() != 0
 
         if edge_weight is not None:
             assert edge_weight is None, "Not implemented yet!!"
