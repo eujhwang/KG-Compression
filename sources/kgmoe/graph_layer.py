@@ -5,8 +5,8 @@ from torch_geometric.nn.pool.topk_pool import topk, filter_adj
 from torch_scatter import scatter_max, scatter_mean, scatter_add
 import torch.nn.functional as F
 
-from trainers.kgtrainer_utils import sinkhorn_loss_default
-from torch_geometric.nn import DenseGCNConv, GCNConv
+from sources.kgmoe.gcn_conv import GCNConv
+from sources.kgmoe.pooling_layer import CoPooling
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
@@ -37,7 +37,7 @@ class GraphEncoder(nn.Module):
         self.bias = Parameter(torch.Tensor(1))
 
         # self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
-        self.score_layer = GCNConv(embed_size, 1)
+        self.score_layer = GCNConv(embed_size, 1, add_self_loops=True)
         self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
         self.reset_parameters()
 
@@ -114,7 +114,8 @@ class GraphEncoder(nn.Module):
         for i in range(bsz):
             xi = x[i]
             edge_index = torch.stack([head[i, :], tail[i, :]], dim=1).T
-            score = self.score_layer(xi, edge_index.to(x.device)).squeeze()
+            print("edge_index:",edge_index.shape,"triple_label[i]:", triple_label[i].shape)
+            score = self.score_layer(xi, edge_index.to(x.device), triple_label=triple_label[i]).squeeze()
             label = edge_index.new_zeros(xi.size(0))
 
             perm = topk(score, self.assign_ratio, label)
@@ -279,10 +280,25 @@ class GraphEncoder(nn.Module):
             concept_hidden_list.append(concept_hidden)
         node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
         node_repr = self.node_linear(node_repr)
-        # node_repr = concept_hidden
+
         node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
                                                                   triple_label, concept_labels, concept_ids)
         ###################################### end of sag_pooling ######################################
+
+        ###################################### start of co_pooling ######################################
+        # concept_hidden = memory
+        # relation_hidden = rel_repr
+        # concept_hidden_list = [memory]
+        # for i in range(self.hop_number):
+        #     concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
+        #     concept_hidden_list.append(concept_hidden)
+        # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
+        # node_repr = self.node_linear(node_repr)
+        #
+        # self.copooling(concept_hidden, relation_hidden, head, tail, triple_label)
+
+        ###################################### end of co_pooling ######################################
+
 
         ###################################### start of Coarsening ######################################
         # coarse_x = memory
