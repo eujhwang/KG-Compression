@@ -6,6 +6,7 @@ from torch_scatter import scatter_max, scatter_mean, scatter_add
 import torch.nn.functional as F
 
 from sources.kgmoe.gcn_conv import GCNConv
+# from sources.kgmoe.pooling_layer import CoPooling
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
@@ -38,6 +39,7 @@ class GraphEncoder(nn.Module):
         # self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
         self.score_layer = GCNConv(embed_size, 1, add_self_loops=True)
         self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
+        # self.copooling = CoPooling(embed_size=embed_size, K=10, alpha=0.1)
         self.reset_parameters()
 
     def reset_parameters(self):

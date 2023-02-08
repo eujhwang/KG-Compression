@@ -102,7 +102,9 @@ class GCNConv(MessagePassing):
                 edge_weight: OptTensor = None) -> Tensor:
         """"""
         perm = (triple_label == -1).nonzero().shape[0]
-        edge_index = edge_index[:, :-perm]
+
+        if perm > 0:
+            edge_index = edge_index[:, :-perm]
 
         if edge_weight is not None:
             assert edge_weight is None, "Not implemented yet!!"
