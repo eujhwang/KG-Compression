@@ -138,8 +138,7 @@ class GCNConv(MessagePassing):
 
         if self.bias is not None:
             out += self.bias
-        print("out:", out.shape, out)
-        assert False
+
         return out
 
     def message(self, x_j: Tensor, edge_weight: OptTensor) -> Tensor:
