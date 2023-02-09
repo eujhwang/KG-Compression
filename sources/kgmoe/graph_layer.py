@@ -10,7 +10,7 @@ from sources.kgmoe.copooling import CoPooling
 
 class GraphEncoder(nn.Module):
     def __init__(self, embed_size, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None, hop_number=2,
-                 num_mixtures=3, assign_ratio=0.5, batch_size=None):
+                 num_mixtures=3, assign_ratio=0.5, pool_type="sag"):
         super(GraphEncoder, self).__init__()
 
         self.hop_number = hop_number
@@ -22,9 +22,9 @@ class GraphEncoder(nn.Module):
         self.tokenizer = tokenizer
         self.num_mixtures = num_mixtures
         self.assign_ratio = assign_ratio
-        print("assign_ratio:", self.assign_ratio, "num_mixtures:", self.num_mixtures)
         self.relation_embed = nn.Embedding(50, embed_size, padding_idx=0)
-        
+        self.pool_type = pool_type
+        print("assign_ratio:", self.assign_ratio, "num_mixtures:", self.num_mixtures, "pool_type:", self.pool_type)
         # self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
         
         self.W_s = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)]) 
@@ -39,7 +39,7 @@ class GraphEncoder(nn.Module):
         # self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
         self.score_layer = GCNConv(embed_size, 1, add_self_loops=True)
         self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
-        self.copooling = CoPooling(batch_size, num_mixtures, embed_size=embed_size, K=10, alpha=0.1)
+        self.copooling = CoPooling(embed_size=embed_size, K=10, alpha=0.1)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -281,8 +281,9 @@ class GraphEncoder(nn.Module):
         node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
         node_repr = self.node_linear(node_repr)
 
-        node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
-                                                                  triple_label, concept_labels, concept_ids)
+        if self.pool_type == "sag":
+            node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
+                                                                      triple_label, concept_labels, concept_ids)
         ###################################### end of sag_pooling ######################################
 
         ###################################### start of co_pooling ######################################
@@ -295,8 +296,9 @@ class GraphEncoder(nn.Module):
         # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
         # node_repr = self.node_linear(node_repr)
         #
-        # self.copooling(concept_hidden, relation_hidden, head, tail, triple_label)
-
+        if self.pool_type == "copooling":
+            node_repr, concept_labels, concept_ids = self.copooling(concept_hidden, relation_hidden, head, tail,
+                                                                    triple_label, concept_labels, concept_ids)
         ###################################### end of co_pooling ######################################
 
 
@@ -334,7 +336,6 @@ class GraphEncoder(nn.Module):
         # node_repr = concept outputs
         # node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
 
-        # node_repr = memory + node_repr
         # head_repr = torch.gather(node_repr, 1, head.unsqueeze(-1).expand(node_repr.size(0), head.size(1), node_repr.size(-1)))
         # tail_repr = torch.gather(node_repr, 1, tail.unsqueeze(-1).expand(node_repr.size(0), tail.size(1), node_repr.size(-1)))
         #

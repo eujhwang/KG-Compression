@@ -74,8 +74,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
         mixture_tmp = torch.arange(self.mixtures, dtype=torch.long, device=inputs['input_ids'].device).view(
             self.mixtures, 1)  # [2, 1] [[0], [1]]
-        kg_mixture_ids = mixture_tmp.repeat(inputs[
-                                                'concept_ids'].shape)  # [120, 300] [[0, 0, 0, ..., 0], [1, 1, 1, ..., 1], ..., [0, 0, 0, ..., 0], [1, 1, 1, ..., 1]]
+        kg_mixture_ids = mixture_tmp.repeat(inputs['concept_ids'].shape)  # [120, 300] [[0, 0, 0, ..., 0], [1, 1, 1, ..., 1], ..., [0, 0, 0, ..., 0], [1, 1, 1, ..., 1]]
 
         if self.mixture_embedding:
 

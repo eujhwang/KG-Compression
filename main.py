@@ -101,7 +101,7 @@ class DataTrainingArguments:
     use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
     extend_relation: Optional[bool] = field(default=False, metadata={"help": "whether to extend relation or not."})
     assign_ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
-
+    pool_type: Optional[str] = field(default="sag", metadata={"help": "pooling method 'sag', 'copooling'"},)
 
 def set_seed(seed: int):
     """ Set all seeds to make results reproducible (deterministic mode).
@@ -212,9 +212,7 @@ def main():
         config.mixtures = data_args.mixtures
         config.mixture_embedding = data_args.mixture_embedding
         config.assign_ratio = data_args.assign_ratio
-    assert training_args.per_device_train_batch_size == training_args.per_device_eval_batch_size
-    config.batch_size = training_args.per_device_train_batch_size
-    print("batch_size:", config.batch_size)
+        config.pool_type = data_args.pool_type
 
     model = BartModel.from_pretrained(
         model_args.model_name_or_path,
