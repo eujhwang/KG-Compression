@@ -162,6 +162,7 @@ class CoPooling(nn.Module):
         self.graph_attn = GraphAttention(num_in_features=embed_size,
                                          num_out_features=embed_size, num_of_heads=1)
         self.linear = nn.Linear(2 * embed_size, embed_size)
+        # self.score_lin = nn.Linear(embed_size, 1)
 
     def forward(self, concept_hidden, relation_hidden, head, tail, triple_label, concept_labels, concept_ids):
         x_cut = self.pagerank(concept_hidden, relation_hidden, head, tail, triple_label)
@@ -223,7 +224,7 @@ class CoPooling(nn.Module):
             index = cut_edge_index_i[1]
             out = scatter_add(x_j, index, dim=0, dim_size=num_nodes)
 
-            score = torch.sum(torch.abs(out), dim=1) + 0.0000001
+            score = torch.sum(torch.abs(out), dim=1)
             label = cut_edge_index_i.new_zeros(concept_hidden[i].size(0))
 
             perm = topk(score, self.node_ratio, label)
