@@ -132,7 +132,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                 scaled_loss.backward()
         else:
             loss.backward()
-
+        del lm_loss, kg_loss, opt_loss
         return loss.detach()
 
     def compute_loss(self, model, inputs):
@@ -144,6 +144,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
         opt_loss = self._compute_opt_loss(kg_hidden, kg_outputs, model.device)
+        del lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
@@ -155,6 +156,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels = model(**_inputs, use_cache=False)
         lm_logits = lm_outputs[0]
         mixture_ids = self._compute_mixture_loss(lm_logits, kg_logits, _lm_labels, kg_labels)
+        del lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels
         return mixture_ids
 
     def _compute_mixture_loss(self, lm_logits, kg_logits, lm_labels, kg_labels):

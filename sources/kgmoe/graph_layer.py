@@ -37,14 +37,17 @@ class GraphEncoder(nn.Module):
         self.bias = Parameter(torch.Tensor(1))
 
         # self.score_layer = GCNConv(embed_size * (self.hop_number+1), 1)
-        self.score_layer = GCNConv(embed_size, 1, add_self_loops=True)
         self.node_linear = nn.Linear(embed_size * (self.hop_number+1), embed_size, bias=True)
-        self.copooling = CoPooling(embed_size=embed_size, K=10, alpha=0.1)
+        if self.pool_type == "sag":
+            self.score_layer = GCNConv(embed_size, 1, add_self_loops=True)
+        if self.pool_type == "copooling":
+            self.copooling = CoPooling(embed_size=embed_size, K=10, alpha=0.1)
         self.reset_parameters()
 
     def reset_parameters(self):
         self.lin.reset_parameters()
-        self.score_layer.reset_parameters()
+        if self.pool_type == "sag":
+            self.score_layer.reset_parameters()
         self.node_linear.reset_parameters()
 
     def normalize_batch_adj(self, adj):  # adj shape: batch_size * num_node * num_node, D^{-1/2} (A+I) D^{-1/2}
