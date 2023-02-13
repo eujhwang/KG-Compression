@@ -262,7 +262,7 @@ def finetune(args, questions, answers):
     valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
 
     # this produces sample output every 100 steps
-    sample_every = 10
+    sample_every = 100
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, eps=args.epsilon)
     total_steps = len(train_dataloader) * args.epochs
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
