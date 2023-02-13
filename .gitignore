@@ -10,3 +10,4 @@ evals/__pycache__
 sources/kgmoe/__pycache__
 trainers/__pycache__
 wandb/
+preprocess/__pycache__
