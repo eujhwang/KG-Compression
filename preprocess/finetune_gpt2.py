@@ -204,7 +204,7 @@ def train_epoch(model, tokenizer, optimizer, scheduler, train_dataloader, sample
                 num_return_sequences=1
             )
             for i, sample_output in enumerate(sample_outputs):
-                print("{}: {}".format(i, tokenizer.decode(sample_output, skip_special_tokens=True)))
+                logging.info("{}: {}".format(i, tokenizer.decode(sample_output, skip_special_tokens=True)))
             model.train()
 
         loss.backward()
@@ -277,30 +277,30 @@ def finetune(args, questions, answers):
         # ========================================
 
         print("")
-        print('======== Epoch {:} / {:} ========'.format(epoch_i + 1, args.epochs))
-        print('Training...')
+        logging.info('======== Epoch {:} / {:} ========'.format(epoch_i + 1, args.epochs))
+        logging.info('Training...')
 
         t0 = time.time()
         avg_train_loss = train_epoch(model, tokenizer, optimizer, scheduler, train_dataloader, sample_every)
         training_time = format_time(time.time() - t0) # Measure how long this epoch took.
 
         print("")
-        print("  Average training loss: {0:.2f}".format(avg_train_loss))
-        print("  Training epoch took: {:}".format(training_time))
+        logging.info("  Average training loss: {0:.2f}".format(avg_train_loss))
+        logging.info("  Training epoch took: {:}".format(training_time))
 
         # ========================================
         #               Validation
         # ========================================
 
         print("")
-        print("Running Validation...")
+        logging.info("Running Validation...")
 
         t0 = time.time()
         avg_val_loss = eval_epoch(model, valid_dataloader)
         validation_time = format_time(time.time() - t0)
 
-        print("  Validation Loss: {0:.2f}".format(avg_val_loss))
-        print("  Validation took: {:}".format(validation_time))
+        logging.info("  Validation Loss: {0:.2f}".format(avg_val_loss))
+        logging.info("  Validation took: {:}".format(validation_time))
 
         # Record all statistics from this epoch.
         training_stats.append(
@@ -314,8 +314,8 @@ def finetune(args, questions, answers):
         )
 
     print("")
-    print("Training complete!")
-    print("Total training took {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
+    logging.info("Training complete!")
+    logging.info("Total training took {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
 
 
 if __name__ == "__main__":
