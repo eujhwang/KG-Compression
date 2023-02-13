@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pickle
+import random
 import time
 
 import torch.cuda
@@ -194,8 +195,8 @@ def train_epoch(model, tokenizer, optimizer, scheduler, train_dataloader, sample
             generated = torch.tensor(tokenizer.encode(input_seq)).unsqueeze(0)
 
             sample_outputs = model.generate(
-                q_input_ids,
-                bos_token_id=tokenizer.bos_token_id,
+                # generated,
+                bos_token_id=random.randint(1,30000),
                 do_sample=True,
                 top_k=30,
                 max_length=50,
