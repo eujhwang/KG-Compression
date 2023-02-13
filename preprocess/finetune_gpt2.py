@@ -346,7 +346,7 @@ if __name__ == "__main__":
         level=logging.INFO,
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(f'{args.out_dir}/out.log')
+            logging.FileHandler(f'out.log')
         ]
     )
 
