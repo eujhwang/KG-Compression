@@ -342,7 +342,7 @@ if __name__ == "__main__":
     logging.basicConfig(
         format=f'%(asctime)s %(message)s',
         datefmt='%H:%M:%S',
-        force=True,
+        # force=True,
         level=logging.INFO,
         handlers=[
             logging.StreamHandler(),
