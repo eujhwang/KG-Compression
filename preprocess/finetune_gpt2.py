@@ -319,14 +319,15 @@ def finetune(args, questions, answers):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", default="eg", type=str, help="image directory")
+    parser.add_argument("--data_dir", default="eg", type=str, help="data directory")
+    parser.add_argument("--out_dir", default="output", type=str, help="log output directory")
     parser.add_argument("--finetune", action="store_true", help="whether to finetune or not")
 
     # training
-    parser.add_argument("--epochs", default=30, type=int, help="whether to finetune or not")
-    parser.add_argument("--learning_rate", default=5e-5, type=float, help="whether to finetune or not")
-    parser.add_argument("--warmup_steps", default=1e2, type=float, help="whether to finetune or not")
-    parser.add_argument("--epsilon", default=1e-8, type=float, help="whether to finetune or not")
+    parser.add_argument("--epochs", default=30, type=int, help="number of epochs")
+    parser.add_argument("--learning_rate", default=5e-5, type=float, help="learning rate")
+    parser.add_argument("--warmup_steps", default=1e2, type=float, help="warmup steps")
+    parser.add_argument("--epsilon", default=1e-8, type=float, help="epsilon for optimizer")
 
     args = parser.parse_args()
 
