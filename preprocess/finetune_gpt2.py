@@ -1,25 +1,21 @@
 import argparse
 import configparser
 import datetime
-import itertools
 import json
 import logging
 import os
 import pickle
-import random
-import sys
 import time
-from random import sample
 
 import torch.cuda
 import tqdm
 
 import networkx as nx
-from torch.utils.data import DataLoader, SequentialSampler, RandomSampler
+from torch.utils.data import DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, TrainingArguments, Trainer, set_seed, AdamW, \
     get_linear_schedule_with_warmup
 
-from preprocess.dataset import ConceptDataset, DataCollator
+from dataset import ConceptDataset
 
 config = configparser.ConfigParser()
 config.read("paths.cfg")
