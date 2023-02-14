@@ -11,3 +11,4 @@ sources/kgmoe/__pycache__
 trainers/__pycache__
 wandb/
 preprocess/__pycache__
+preprocess/log/
