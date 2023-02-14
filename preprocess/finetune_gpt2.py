@@ -12,6 +12,7 @@ import torch.cuda
 import tqdm
 
 import networkx as nx
+from numpy import inf
 from torch.utils.data import DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, TrainingArguments, Trainer, set_seed, AdamW, \
     get_linear_schedule_with_warmup
@@ -238,6 +239,27 @@ def eval_epoch(model, valid_dataloader):
     return avg_val_loss
 
 
+def save_model(model, tokenizer, args):
+    # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
+
+    output_dir = './model_save/'
+
+    # Create output directory if needed
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    logging.info("Saving model to %s" % output_dir)
+
+    # Save a trained model, configuration and tokenizer using `save_pretrained()`.
+    # They can then be reloaded using `from_pretrained()`
+    model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
+    model_to_save.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    # Good practice: save your training arguments together with the trained model
+    torch.save(args, os.path.join(output_dir, 'training_args.bin'))
+
+
 def finetune(args, questions, answers):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     # setup tokenizer and model
@@ -271,6 +293,7 @@ def finetune(args, questions, answers):
 
     total_t0 = time.time()
     training_stats = []
+    best_val_loss = inf
     for epoch_i in range(0, args.epochs):
         # ========================================
         #               Training
@@ -313,9 +336,38 @@ def finetune(args, questions, answers):
             }
         )
 
+        if best_val_loss > avg_val_loss:
+            logging.info("Best model updated! at epoch {:}".format(epoch_i + 1))
+            save_model(model, tokenizer, args)
+
     print("")
     logging.info("Training complete!")
     logging.info("Total training took {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
+
+
+def predict(model, tokenizer, device):
+    model.eval()
+
+    prompt = "<|startoftext|>"
+
+    generated = torch.tensor(tokenizer.encode(prompt)).unsqueeze(0)
+    generated = generated.to(device)
+
+    print(generated)
+
+    sample_outputs = model.generate(
+        generated,
+        # bos_token_id=random.randint(1,30000),
+        do_sample=True,
+        top_k=50,
+        max_length=300,
+        top_p=0.95,
+        num_return_sequences=3
+    )
+
+    for i, sample_output in enumerate(sample_outputs):
+        logging.info("{}: {}\n\n".format(i, tokenizer.decode(sample_output, skip_special_tokens=True)))
+
 
 
 if __name__ == "__main__":
@@ -370,8 +422,12 @@ if __name__ == "__main__":
 
     if args.finetune:
         logging.info("finetune start...")
-        finetune(args, questions, answers)
+        model, tokenizer, device = finetune(args, questions, answers)
 
+
+    if args.predict:
+        logging.info("prediction start...")
+        predict(model, tokenizer, device)
     # trainer = Trainer(
     #     model=model,
     #     args=training_args,
