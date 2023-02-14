@@ -361,9 +361,16 @@ def finetune(args, questions, answers):
             logging.info("Best model updated! at epoch {:}".format(epoch_i + 1))
             save_model(model, tokenizer, args)
 
+        logging.info("prediction start...")
+        predict(model, tokenizer, device)
+
     print("")
     logging.info("Training complete!")
     logging.info("Total training took {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
+
+    logging.info("prediction start...")
+    predict(model, tokenizer, device)
+
     return model, tokenizer, device
 
 def predict(model, tokenizer, device):
@@ -410,7 +417,8 @@ if __name__ == "__main__":
 
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
-    sampled_concept_file = f'{DATA_PATH}/ckg_gpt2_{dataset}_{args.sample_percent}_{args.output_name}.pkl'
+    sampled_concept_file = f'{DATA_PATH}/ckg_gpt2_eg_0.5.pkl'
+    print("sampled_concept_file:", sampled_concept_file)
 
     set_seed(42)
     load_resources()
@@ -441,6 +449,9 @@ if __name__ == "__main__":
             questions = common_concept_dict["question"]
             answers = common_concept_dict["answer"]
             assert len(questions) == len(answers)
+
+    print("questions:", questions[:5])
+    print("answers:", answers[:5])
 
     if args.finetune:
         logging.info("finetune start...")
