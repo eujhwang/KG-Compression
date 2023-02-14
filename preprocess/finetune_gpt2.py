@@ -104,7 +104,7 @@ def find_neighbors(source_concepts, target_concepts):
     return common_concept_dict
 
 
-def preprocess(input_data_path, input_triple_path):
+def preprocess(args, input_data_path, input_triple_path):
     ############################## train data ##############################
     data = []
     with open(input_data_path, 'r') as f:
@@ -115,20 +115,21 @@ def preprocess(input_data_path, input_triple_path):
     with open(input_triple_path, 'r') as f:
         for line in f.readlines():
             triple.append(json.loads(line))
-    # print("triple:", triple[:5])
-    # assert False
 
     assert len(data) == len(triple)
 
-    blacklist = ["people", "person", "object", "being"]
+    if args.sample_percent > 0 and args.sample_percent < 100:
+        total_len = len(data)
+        sample_len = int(len(data) * args.sample_percent / 100)
+        indices = random.sample(range(total_len), sample_len)
 
+    blacklist = ["people", "person", "object", "being"]
     check = []
     questions = []
     answers = []
-    for d, t in tqdm.tqdm(zip(data, triple), total=len(list(zip(data, triple)))):
-        qc = d['qc']
-        ac = d['ac']
-        # concepts = list(set(t['concepts']))
+    for index in tqdm.tqdm(indices, total=len(indices)):
+        qc = data[index]['qc']
+        ac = data[index]['ac']
 
         if len(qc) == 0 and len(ac) == 0:
             continue
@@ -141,8 +142,11 @@ def preprocess(input_data_path, input_triple_path):
         # print("qc:", qc, "ac:", ac, "concepts:", concepts)
         # question = "What are the related concepts among "+" and ".join(qc+ac) +"?"
         # answer = ",".join([c for c in concepts if c not in qc+ac])
+        pairs = list(itertools.product(qc, ac))
+        if len(pairs) > 5:
+            pairs = random.sample(pairs, 5)
 
-        for pair in itertools.product(qc, ac):
+        for pair in pairs:
             s_word, t_word = pair[0], pair[1]
             s_id, t_id = concept2id[pair[0]], concept2id[pair[1]]
 
@@ -150,8 +154,6 @@ def preprocess(input_data_path, input_triple_path):
                 continue
 
             if not cpnet_simple.has_node(s_id) or not cpnet_simple.has_node(t_id):
-                # logging.info("not exist!! -- s_word: {:}, s_id: {:}, {:} and t_word: {:}, t_id: {:}, {:}".format(
-                #     s_word, s_id, cpnet_simple.has_node(s_id), t_word, t_id, cpnet_simple.has_node(t_id)))
                 continue
 
             if not nx.has_path(cpnet_simple, source=s_id, target=t_id):
@@ -165,8 +167,6 @@ def preprocess(input_data_path, input_triple_path):
                     common_concepts.add(id2concept[node])
             answer = ",".join([c for c in list(common_concepts) if c not in [s_word, t_word]])
 
-            # print("question:", question)
-            # print("answer:", answer)
             questions.append(question.replace("_", " "))
             answers.append(answer.replace("_", " "))
 
@@ -402,13 +402,12 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="learning rate")
     parser.add_argument("--warmup_steps", default=1e2, type=float, help="warmup steps")
     parser.add_argument("--epsilon", default=1e-8, type=float, help="epsilon for optimizer")
-
+    parser.add_argument("--sample_percent", default=30, type=int, help="percentage for sampling data instances")
     args = parser.parse_args()
-
 
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
-    sampled_concept_file = f'{DATA_PATH}/ckg_gpt2_{dataset}.pkl'
+    sampled_concept_file = f'{DATA_PATH}/ckg_gpt2_{dataset}_{args.sample_percent}.pkl'
 
     set_seed(42)
     load_resources()
@@ -417,7 +416,6 @@ if __name__ == "__main__":
     logging.basicConfig(
         format=f'%(asctime)s %(message)s',
         datefmt='%H:%M:%S',
-        # force=True,
         level=logging.INFO,
         handlers=[
             logging.StreamHandler(),
@@ -425,11 +423,10 @@ if __name__ == "__main__":
         ]
     )
 
-    # logger.setLevel(log_level)
-
     if not os.path.exists(sampled_concept_file):
         load_cpnet()
-        questions, answers = preprocess(DATA_PATH + "/{}.concepts_nv.json".format('train'), DATA_PATH + "/train.kg.json")
+        questions, answers = preprocess(args, DATA_PATH + "/{}.concepts_nv.json".format('train'),
+                                        DATA_PATH + "/train.kg.json")
         assert len(questions) == len(answers)
 
         if questions is not None or len(questions) > 0:
@@ -445,7 +442,6 @@ if __name__ == "__main__":
     if args.finetune:
         logging.info("finetune start...")
         model, tokenizer, device = finetune(args, questions, answers)
-
 
     if args.predict:
         logging.info("prediction start...")
