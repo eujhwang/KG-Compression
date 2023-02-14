@@ -123,8 +123,7 @@ def preprocess(input_data_path, input_triple_path):
     check = []
     questions = []
     answers = []
-    zip_data = zip(data, triple)
-    for d, t in tqdm.tqdm(zip_data, total=len(list(zip_data))):
+    for d, t in tqdm.tqdm(zip(data, triple), total=len(list(zip(data, triple)))):
         qc = d['qc']
         ac = d['ac']
         # concepts = list(set(t['concepts']))
@@ -428,7 +427,7 @@ if __name__ == "__main__":
         questions, answers = preprocess(DATA_PATH + "/{}.concepts_nv.json".format('train'), DATA_PATH + "/train.kg.json")
         assert len(questions) == len(answers)
 
-        if questions is not None:
+        if questions is not None or len(questions) > 0:
             with open(sampled_concept_file, 'wb') as handle:
                 pickle.dump({"question": questions, "answer": answers}, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
