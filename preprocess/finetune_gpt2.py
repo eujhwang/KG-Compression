@@ -409,6 +409,7 @@ if __name__ == "__main__":
     set_seed(42)
     load_resources()
 
+    str_date_time = datetime.datetime.now().strftime("%Y%m%d%H")
     logging.basicConfig(
         format=f'%(asctime)s %(message)s',
         datefmt='%H:%M:%S',
@@ -416,7 +417,7 @@ if __name__ == "__main__":
         level=logging.INFO,
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler("log/out.log")
+            logging.FileHandler(f"log/out_{str_date_time}.log")
         ]
     )
 
