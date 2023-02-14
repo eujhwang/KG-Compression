@@ -145,7 +145,8 @@ def preprocess(input_data_path, input_triple_path):
             s_id, t_id = concept2id[pair[0]], concept2id[pair[1]]
 
             if not cpnet_simple.has_node(s_id) or not cpnet_simple.has_node(t_id):
-                logging.info("not exist!! -- s_id:", s_word, s_id, cpnet_simple.has_node(s_id), "t_id:", t_word, t_id, cpnet_simple.has_node(t_id))
+                logging.info("not exist!! -- s_word: {:}, s_id: {:}, {:} and t_word: {:}, t_id: {:}, {:}".format(
+                    s_word, s_id, cpnet_simple.has_node(s_id), "t_id:", t_word, t_id, cpnet_simple.has_node(t_id)))
                 continue
 
             if not nx.has_path(cpnet_simple, source=s_id, target=t_id):
