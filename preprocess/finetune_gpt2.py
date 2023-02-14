@@ -389,6 +389,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", default="eg", type=str, help="data directory")
     parser.add_argument("--out_dir", default="output", type=str, help="log output directory")
     parser.add_argument("--finetune", action="store_true", help="whether to finetune or not")
+    parser.add_argument("--predict", action="store_true", help="whether to predict or not")
 
     # training
     parser.add_argument("--epochs", default=30, type=int, help="number of epochs")
