@@ -31,8 +31,8 @@ class ConceptDataset(Dataset):
         # print("q:", len(self.questions), type(self.questions))
         # print("a:", self.answers[idx])
 
-        question = self.questions[idx].replace("_", " ")
-        answer = self.answers[idx].replace("_", " ")
+        question = self.questions[idx]
+        answer = self.answers[idx]
 
         q_encode = self.tokenizer('<|startoftext|>' + question + '<|endoftext|>', truncation=True,
                                   max_length=self.max_length, padding="max_length")
