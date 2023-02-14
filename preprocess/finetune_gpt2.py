@@ -120,6 +120,8 @@ def preprocess(input_data_path, input_triple_path):
 
     assert len(data) == len(triple)
 
+    blacklist = ["people", "person", "object", "being"]
+
     check = []
     questions = []
     answers = []
@@ -144,9 +146,12 @@ def preprocess(input_data_path, input_triple_path):
             s_word, t_word = pair[0], pair[1]
             s_id, t_id = concept2id[pair[0]], concept2id[pair[1]]
 
+            if s_word in blacklist or t_word in blacklist:
+                continue
+
             if not cpnet_simple.has_node(s_id) or not cpnet_simple.has_node(t_id):
-                logging.info("not exist!! -- s_word: {:}, s_id: {:}, {:} and t_word: {:}, t_id: {:}, {:}".format(
-                    s_word, s_id, cpnet_simple.has_node(s_id), t_word, t_id, cpnet_simple.has_node(t_id)))
+                # logging.info("not exist!! -- s_word: {:}, s_id: {:}, {:} and t_word: {:}, t_id: {:}, {:}".format(
+                #     s_word, s_id, cpnet_simple.has_node(s_id), t_word, t_id, cpnet_simple.has_node(t_id)))
                 continue
 
             if not nx.has_path(cpnet_simple, source=s_id, target=t_id):
