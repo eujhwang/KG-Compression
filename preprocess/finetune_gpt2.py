@@ -123,7 +123,8 @@ def preprocess(input_data_path, input_triple_path):
     check = []
     questions = []
     answers = []
-    for d, t in zip(data, triple):
+    zip_data = zip(data, triple)
+    for d, t in tqdm.tqdm(zip_data, total=len(list(zip_data))):
         qc = d['qc']
         ac = d['ac']
         # concepts = list(set(t['concepts']))
@@ -146,7 +147,7 @@ def preprocess(input_data_path, input_triple_path):
 
             if not cpnet_simple.has_node(s_id) or not cpnet_simple.has_node(t_id):
                 logging.info("not exist!! -- s_word: {:}, s_id: {:}, {:} and t_word: {:}, t_id: {:}, {:}".format(
-                    s_word, s_id, cpnet_simple.has_node(s_id), "t_id:", t_word, t_id, cpnet_simple.has_node(t_id)))
+                    s_word, s_id, cpnet_simple.has_node(s_id), t_word, t_id, cpnet_simple.has_node(t_id)))
                 continue
 
             if not nx.has_path(cpnet_simple, source=s_id, target=t_id):
