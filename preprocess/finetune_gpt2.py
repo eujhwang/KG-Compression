@@ -1,6 +1,7 @@
 import argparse
 import configparser
 import datetime
+import itertools
 import json
 import logging
 import os
@@ -125,7 +126,7 @@ def preprocess(input_data_path, input_triple_path):
     for d, t in zip(data, triple):
         qc = d['qc']
         ac = d['ac']
-        concepts = list(set(t['concepts']))
+        # concepts = list(set(t['concepts']))
 
         if len(qc) == 0 and len(ac) == 0:
             continue
@@ -136,19 +137,32 @@ def preprocess(input_data_path, input_triple_path):
             continue
 
         # print("qc:", qc, "ac:", ac, "concepts:", concepts)
-        question = "What are the related concepts among "+" and ".join(qc+ac) +"?"
-        answer = ",".join([c for c in concepts if c not in qc+ac])
-        # print("question:", question)
-        # print("answer:", answer)
+        # question = "What are the related concepts among "+" and ".join(qc+ac) +"?"
+        # answer = ",".join([c for c in concepts if c not in qc+ac])
 
-        questions.append(question)
-        answers.append(answer)
-        # break
-        # nodes = []
-        # nodes.extend(qc)
-        # nodes.extend(ac)
-        # nodes = set(nodes)
-        # nodes = [concept2id[n] for n in list(nodes)]
+        for pair in itertools.product(qc, ac):
+            s_word, t_word = pair[0], pair[1]
+            s_id, t_id = concept2id[pair[0]], concept2id[pair[1]]
+
+            if not cpnet_simple.has_node(s_id) or not cpnet_simple.has_node(t_id):
+                logging.info("not exist!! -- s_id:", s_word, s_id, cpnet_simple.has_node(s_id), "t_id:", t_word, t_id, cpnet_simple.has_node(t_id))
+                continue
+
+            if not nx.has_path(cpnet_simple, source=s_id, target=t_id):
+                continue
+
+            question = f"What are the related concepts between {s_word} and {t_word}?"
+            common_concepts = set()
+            all_shortest_paths = list(nx.all_shortest_paths(cpnet_simple, source=s_id, target=t_id))[:10]
+            for path in all_shortest_paths:
+                for node in path[1:-1]:
+                    common_concepts.add(id2concept[node])
+            answer = ",".join([c for c in list(common_concepts) if c not in [s_word, t_word]])
+
+            # print("question:", question)
+            # print("answer:", answer)
+            questions.append(question.replace("_", " "))
+            answers.append(answer.replace("_", " "))
 
     return questions, answers
 
