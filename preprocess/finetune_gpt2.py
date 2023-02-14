@@ -160,16 +160,17 @@ def preprocess(args, input_data_path, input_triple_path):
                 continue
 
             question = f"What are the related concepts between {s_word} and {t_word}?"
-            common_concepts = set()
+            # common_concepts = set()
             all_shortest_paths = list(nx.all_shortest_paths(cpnet_simple, source=s_id, target=t_id))[:10]
             for path in all_shortest_paths:
                 for node in path[1:-1]:
-                    common_concepts.add(id2concept[node])
-            answer = ",".join([c for c in list(common_concepts) if c not in [s_word, t_word]])
+                    # common_concepts.add(id2concept[node])
 
-            questions.append(question.replace("_", " "))
-            answers.append(answer.replace("_", " "))
+                    questions.append(question.replace("_", " "))
+                    answers.append(id2concept[node].replace("_", " "))
+            # answer = ",".join([c for c in list(common_concepts) if c not in [s_word, t_word]])
 
+    logging.info("# of questions and answers: {:}".format(len(questions)))
     return questions, answers
 
     ############################## train data ##############################
@@ -262,7 +263,7 @@ def eval_epoch(model, valid_dataloader):
 def save_model(model, tokenizer, args):
     # Saving best-practices: if you use defaults names for the model, you can reload it using from_pretrained()
 
-    output_dir = './model_save/'
+    output_dir = f'./model_save/{args.data_dir.split("/")[-1]}_{args.sample_percent}_{args.output_name}'
 
     # Create output directory if needed
     if not os.path.exists(output_dir):
@@ -283,9 +284,9 @@ def save_model(model, tokenizer, args):
 def finetune(args, questions, answers):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     # setup tokenizer and model
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2', bos_token='<|startoftext|>', eos_token='<|endoftext|>',
+    tokenizer = GPT2Tokenizer.from_pretrained(args.pretrained, bos_token='<|startoftext|>', eos_token='<|endoftext|>',
                                               pad_token='<|pad|>')  # gpt2-medium
-    model = GPT2LMHeadModel.from_pretrained('gpt2')
+    model = GPT2LMHeadModel.from_pretrained(args.pretrained)
     model.resize_token_embeddings(len(tokenizer))
 
     model = model.to(device)
@@ -305,7 +306,7 @@ def finetune(args, questions, answers):
     valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False)
 
     # this produces sample output every 100 steps
-    sample_every = 100
+    sample_every = 10
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, eps=args.epsilon)
     total_steps = len(train_dataloader) * args.epochs
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
@@ -363,7 +364,7 @@ def finetune(args, questions, answers):
     print("")
     logging.info("Training complete!")
     logging.info("Total training took {:} (h:mm:ss)".format(format_time(time.time() - total_t0)))
-
+    return model, tokenizer, device
 
 def predict(model, tokenizer, device):
     model.eval()
@@ -398,16 +399,18 @@ if __name__ == "__main__":
     parser.add_argument("--predict", action="store_true", help="whether to predict or not")
 
     # training
+    parser.add_argument("--pretrained", default="gpt2", help="pretrained model name")
     parser.add_argument("--epochs", default=30, type=int, help="number of epochs")
     parser.add_argument("--learning_rate", default=5e-5, type=float, help="learning rate")
     parser.add_argument("--warmup_steps", default=1e2, type=float, help="warmup steps")
     parser.add_argument("--epsilon", default=1e-8, type=float, help="epsilon for optimizer")
-    parser.add_argument("--sample_percent", default=30, type=int, help="percentage for sampling data instances")
+    parser.add_argument("--sample_percent", default=30, type=float, help="percentage for sampling data instances")
+    parser.add_argument("--output_name", default="", type=str, help="output file name")
     args = parser.parse_args()
 
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
-    sampled_concept_file = f'{DATA_PATH}/ckg_gpt2_{dataset}_{args.sample_percent}.pkl'
+    sampled_concept_file = f'{DATA_PATH}/ckg_gpt2_{dataset}_{args.sample_percent}_{args.output_name}.pkl'
 
     set_seed(42)
     load_resources()
