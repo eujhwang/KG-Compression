@@ -173,9 +173,10 @@ def augment_kg_triples(args, kgs):
             # find the relations that do not exist in the original, and then obtain new tail event using comet
             all_relation_ids = _id2relation.keys()
             for (hop_concept, hop_id), relation_ids in hop_relation_dict.items():
-                old_relation_ids = [rel_id for rel_id in list(relation_ids) if rel_id in all_relation_ids] # existing relations
+                # old_relation_ids = [rel_id for rel_id in list(relation_ids) if rel_id in all_relation_ids] # existing relations
+                # new_relation_ids = all_relation_ids - old_relation_ids
 
-                new_relation_ids = all_relation_ids - old_relation_ids
+                new_relation_ids = all_relation_ids - relation_ids
                 new_relations = [_id2relation[rel] for rel in list(new_relation_ids)] # non-existing relations
 
                 if hop != 0 and len(new_relations) > max_new_rel_num:
