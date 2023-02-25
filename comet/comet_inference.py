@@ -242,7 +242,7 @@ def save_json(data, filename):
 
 
 def main(args):
-    device = 'cuda' if torch.cuda.is_available() else: 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
     kg_path = DATA_PATH + "/train.kg.json"
