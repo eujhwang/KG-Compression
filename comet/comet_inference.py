@@ -73,7 +73,7 @@ def load_kg(kg_path):
     return kgs
 
 
-def load_comet(args):
+def load_comet(args, device):
     opt, state_dict = interactive.load_model_file(args.model_file)
 
     data_loader, text_encoder = interactive.load_data("conceptnet", opt)
@@ -83,7 +83,7 @@ def load_comet(args):
 
     model = interactive.make_model(opt, n_vocab, n_ctx, state_dict)
 
-    if args.device != "cpu":
+    if device != "cpu":
         comet_cfg.device = int(args.device)
         comet_cfg.do_gpu = True
         torch.cuda.set_device(comet_cfg.device)
@@ -111,10 +111,10 @@ def comet_inference(model, sampler, data_loader, text_encoder, input_event, rela
 
 
 
-def augment_kg_triples(args, kgs):
+def augment_kg_triples(args, kgs, device):
     print("start augmenting kg triples...")
 
-    model, sampler, data_loader, text_encoder = load_comet(args)
+    model, sampler, data_loader, text_encoder = load_comet(args, device)
 
     conceptnet_relations = data.conceptnet_data.conceptnet_relations
     _relation2id = dict()
@@ -242,6 +242,7 @@ def save_json(data, filename):
 
 
 def main(args):
+    device = 'cuda' if torch.cuda.is_available() else: 'cpu'
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
     kg_path = DATA_PATH + "/train.kg.json"
@@ -250,7 +251,7 @@ def main(args):
     kgs = load_kg(kg_path)
 
     total_concepts = []
-    _data, _concepts = augment_kg_triples(args, kgs)
+    _data, _concepts = augment_kg_triples(args, kgs, device)
 
     total_concepts += _concepts
     print("kg_path:", os.path.basename(kg_path))
@@ -269,7 +270,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="eg")
 
     # comet-inference
-    parser.add_argument("--device", type=str, default="cpu")
+    # parser.add_argument("--device", type=str, default="cu")
     parser.add_argument("--model_file", type=str, default="pretrained_models/conceptnet_pretrained_model.pickle")
     parser.add_argument("--sampling_algorithm", type=str, default="greedy", help="greedy, beam-#, top-#")
 
