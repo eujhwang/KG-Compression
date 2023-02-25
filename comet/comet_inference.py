@@ -82,17 +82,7 @@ def load_comet(args, device):
     n_vocab = len(text_encoder.encoder) + n_ctx
 
     model = interactive.make_model(opt, n_vocab, n_ctx, state_dict)
-
-    if device != "cpu":
-        comet_cfg.device = int(args.device)
-        comet_cfg.do_gpu = True
-        torch.cuda.set_device(comet_cfg.device)
-        model.cuda(comet_cfg.device)
-    else:
-        comet_cfg.device = "cpu"
-
-    # input_event = "swimming"
-    # relation = "relatedto"
+    model = model.to(device)
 
     sampling_algorithm = args.sampling_algorithm
     sampler = interactive.set_sampler(opt, sampling_algorithm, data_loader)
