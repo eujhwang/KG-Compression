@@ -14,3 +14,13 @@ preprocess/__pycache__
 preprocess/log/
 preprocess/wandb/
 preprocess/model_save
+
+
+comet/utils/__pycache__
+comet/src/train/__pycache__
+comet/src/interactive/__pycache__
+comet/src/models/__pycache__
+comet/src/evaluate/__pycache__
+comet/model/
+comet/pretrained_models
+comet/data/
