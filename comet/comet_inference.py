@@ -62,9 +62,8 @@ def load_resources():
     print("relation2id done")
 
 
-def load_kg(DATA_PATH):
+def load_kg(kg_path):
     print("loading train.kg.json...", end="")
-    kg_path = DATA_PATH + "/train.kg.json"
     kgs = []
     with open(kg_path, 'r') as f:
         for line in f.readlines():
@@ -134,9 +133,9 @@ def augment_kg_triples(args, kgs):
 
     max_new_rel_num = 3
     max_one_hop_concept_num = 30
-    max_concept_num = 400
-    max_triple_num = 800
-
+    max_concept_num = 300
+    max_triple_num = 750
+    _data, _concepts = [], []
     for idx, kg in tqdm.tqdm(enumerate(kgs), total=len(kgs)):
         concepts = kg['concepts']
         labels = kg['labels']
@@ -211,30 +210,58 @@ def augment_kg_triples(args, kgs):
         if len(one_hop_concepts) > 0:
             _augment_kg(one_hop_concepts, one_hop_index, 1)
 
+        # update kg values
+        kg['concepts'] = concepts
+        kg['labels'] = labels
+        kg['distances'] = distances
+        kg['relations'] = relations
+        kg['head_ids'] = head_ids
+        kg['tail_ids'] = tail_ids
+        kg['triple_labels'] = triple_labels
+
+        _concepts += concepts
+        _data.append(kg)
         # print("")
-        print("new concepts:", len(concepts), concepts)
-        print("new labels:", len(labels), labels)
-        print("new distances:", len(distances), distances)
-        print("new head_ids:", len(head_ids), head_ids)
-        print("new relations:", len(relations), relations)
-        print("new tail_ids:", len(tail_ids), tail_ids)
-        print("new triple_labels:", len(triple_labels), triple_labels)
-        print("=================================================================")
+        # print("new concepts:", len(concepts), concepts)
+        # print("new labels:", len(labels), labels)
+        # print("new distances:", len(distances), distances)
+        # print("new head_ids:", len(head_ids), head_ids)
+        # print("new relations:", len(relations), relations)
+        # print("new tail_ids:", len(tail_ids), tail_ids)
+        # print("new triple_labels:", len(triple_labels), triple_labels)
+        # print("=================================================================")
+    return _data, _concepts
+
+
+def save_json(data, filename):
+    with open(filename, 'w') as f:
+        for line in data:
+            json.dump(line, f)
+            f.write('\n')
 
 
 def main(args):
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
+    kg_path = DATA_PATH + "/train.kg.json"
 
     load_resources()
-    # ground_truth_paths = load_ground_truth_paths(DATA_PATH)
-    kgs = load_kg(DATA_PATH)
-    # print("len(kgs):", len(kgs), "len(ground_truth_paths):", len(ground_truth_paths))
-    # assert len(ground_truth_paths) == len(kgs)
+    kgs = load_kg(kg_path)
 
-    augment_kg_triples(args, kgs)
-    # comet_inference(args)
+    total_concepts = []
+    _data, _concepts = augment_kg_triples(args, kgs)
 
+    total_concepts += _concepts
+    print("kg_path:", os.path.basename(kg_path))
+    new_kg_file = ".".join(["augmented", os.path.basename(kg_path)])
+
+    save_json(_data, DATA_PATH + f'/{new_kg_file}')
+
+    words_by_frequency = sorted(Counter(total_concepts).items(), key=lambda x: x[1], reverse=True)
+    print('total word counts: ', len(words_by_frequency))
+    with open(DATA_PATH + '/augmented.kg_vocab.txt', 'w') as vocab_file:
+        for word, frequency in words_by_frequency:
+            vocab_file.write('{} {}\n'.format(word, frequency))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
