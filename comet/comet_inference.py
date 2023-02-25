@@ -77,6 +77,8 @@ def load_comet(args, device):
     opt, state_dict = interactive.load_model_file(args.model_file)
 
     data_loader, text_encoder = interactive.load_data("conceptnet", opt)
+    data_loader = data_loader.to(device)
+    text_encoder = text_encoder.to(device)
 
     n_ctx = data_loader.max_e1 + data_loader.max_e2 + data_loader.max_r
     n_vocab = len(text_encoder.encoder) + n_ctx
@@ -86,6 +88,7 @@ def load_comet(args, device):
 
     sampling_algorithm = args.sampling_algorithm
     sampler = interactive.set_sampler(opt, sampling_algorithm, data_loader)
+    sampler = sampler.to(device)
 
     # if relation not in data.conceptnet_data.conceptnet_relations:
     #     relation = "all"
