@@ -77,8 +77,6 @@ def load_comet(args, device):
     opt, state_dict = interactive.load_model_file(args.model_file)
 
     data_loader, text_encoder = interactive.load_data("conceptnet", opt)
-    data_loader = data_loader.to(device)
-    text_encoder = text_encoder.to(device)
 
     n_ctx = data_loader.max_e1 + data_loader.max_e2 + data_loader.max_r
     n_vocab = len(text_encoder.encoder) + n_ctx
@@ -88,7 +86,6 @@ def load_comet(args, device):
 
     sampling_algorithm = args.sampling_algorithm
     sampler = interactive.set_sampler(opt, sampling_algorithm, data_loader)
-    sampler = sampler.to(device)
 
     # if relation not in data.conceptnet_data.conceptnet_relations:
     #     relation = "all"
@@ -148,10 +145,10 @@ def augment_kg_triples(args, kgs, device):
         # print("old triple_labels:", len(triple_labels), triple_labels)
 
         # extract concepts that are 0 or 1 hop away
-        np_concepts = np.asarray(concepts, dtype=str)
-        np_distances = np.asarray(distances, dtype=np.compat.long)
-        np_head_ids = np.asarray(head_ids, dtype=np.compat.long)
-        np_relations = np.asarray(relations, dtype=np.compat.long)
+        np_concepts = np.asarray(concepts, dtype=str, device=device)
+        np_distances = np.asarray(distances, dtype=np.compat.long, device=device)
+        np_head_ids = np.asarray(head_ids, dtype=np.compat.long, device=device)
+        np_relations = np.asarray(relations, dtype=np.compat.long, device=device)
         np_tail_ids = np.asarray(tail_ids, dtype=np.compat.long)
 
         def _augment_kg(hop_concepts, hop_index, hop):
