@@ -73,7 +73,7 @@ def load_kg(kg_path):
     return kgs
 
 
-def load_comet(args, device):
+def load_comet(args):
     opt, state_dict = interactive.load_model_file(args.model_file)
 
     data_loader, text_encoder = interactive.load_data("conceptnet", opt)
@@ -82,7 +82,14 @@ def load_comet(args, device):
     n_vocab = len(text_encoder.encoder) + n_ctx
 
     model = interactive.make_model(opt, n_vocab, n_ctx, state_dict)
-    model = model.to(device)
+
+    if args.device != "cpu":
+        comet_cfg.device = int(args.device)
+        comet_cfg.do_gpu = True
+        torch.cuda.set_device(comet_cfg.device)
+        model.cuda(comet_cfg.device)
+    else:
+        comet_cfg.device = "cpu"
 
     sampling_algorithm = args.sampling_algorithm
     sampler = interactive.set_sampler(opt, sampling_algorithm, data_loader)
@@ -101,10 +108,10 @@ def comet_inference(model, sampler, data_loader, text_encoder, input_event, rela
 
 
 
-def augment_kg_triples(args, kgs, device):
+def augment_kg_triples(args, kgs):
     print("start augmenting kg triples...")
 
-    model, sampler, data_loader, text_encoder = load_comet(args, device)
+    model, sampler, data_loader, text_encoder = load_comet(args)
 
     conceptnet_relations = data.conceptnet_data.conceptnet_relations
     _relation2id = dict()
@@ -145,10 +152,10 @@ def augment_kg_triples(args, kgs, device):
         # print("old triple_labels:", len(triple_labels), triple_labels)
 
         # extract concepts that are 0 or 1 hop away
-        np_concepts = np.asarray(concepts, dtype=str, device=device)
-        np_distances = np.asarray(distances, dtype=np.compat.long, device=device)
-        np_head_ids = np.asarray(head_ids, dtype=np.compat.long, device=device)
-        np_relations = np.asarray(relations, dtype=np.compat.long, device=device)
+        np_concepts = np.asarray(concepts, dtype=str)
+        np_distances = np.asarray(distances, dtype=np.compat.long)
+        np_head_ids = np.asarray(head_ids, dtype=np.compat.long)
+        np_relations = np.asarray(relations, dtype=np.compat.long)
         np_tail_ids = np.asarray(tail_ids, dtype=np.compat.long)
 
         def _augment_kg(hop_concepts, hop_index, hop):
@@ -241,7 +248,7 @@ def main(args):
     kgs = load_kg(kg_path)
 
     total_concepts = []
-    _data, _concepts = augment_kg_triples(args, kgs, device)
+    _data, _concepts = augment_kg_triples(args, kgs)
 
     total_concepts += _concepts
     print("kg_path:", os.path.basename(kg_path))
@@ -260,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="eg")
 
     # comet-inference
-    # parser.add_argument("--device", type=str, default="cu")
+    parser.add_argument("--device", type=str, default="cu")
     parser.add_argument("--model_file", type=str, default="pretrained_models/conceptnet_pretrained_model.pickle")
     parser.add_argument("--sampling_algorithm", type=str, default="greedy", help="greedy, beam-#, top-#")
 
