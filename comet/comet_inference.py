@@ -1,11 +1,14 @@
 import configparser
 import json
 import logging
+import multiprocessing
 import os
 import pickle
 import random
 import sys
 import argparse
+import time
+from multiprocessing import Process
 
 import numpy as np
 import torch
@@ -107,11 +110,99 @@ def comet_inference(model, sampler, data_loader, text_encoder, input_event, rela
     return output_event
 
 
+def _augment_kg(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2relation, model, sampler, data_loader, text_encoder,
+                max_new_rel_num, max_concept_num, max_triple_num, _concepts, _data, idx):
+    c_proc = multiprocessing.current_process()
+    # print("Running on Process",c_proc.name,"PID",c_proc.pid, "idx:", idx)
+    concepts = kg['concepts']
+    labels = kg['labels']
+    distances = kg['distances']
+    relations = kg['relations']
+    head_ids = kg['head_ids']
+    tail_ids = kg['tail_ids']
+    triple_labels = kg['triple_labels']
+    relations = [rel[0] for rel in relations]
+
+    # print("old concepts:", len(concepts), concepts)
+    # print("old labels:", len(labels), labels)
+    # print("old distances:", len(distances), distances)
+    # print("old head_ids:", len(head_ids), head_ids)
+    # print("old relations:", len(relations), relations)
+    # print("old tail_ids:", len(tail_ids), tail_ids)
+    # print("old triple_labels:", len(triple_labels), triple_labels)
+
+    # extract concepts that are 0 or 1 hop away
+    np_concepts = np.asarray(concepts, dtype=str)
+    np_distances = np.asarray(distances, dtype=np.compat.long)
+    np_head_ids = np.asarray(head_ids, dtype=np.compat.long)
+    np_relations = np.asarray(relations, dtype=np.compat.long)
+    np_tail_ids = np.asarray(tail_ids, dtype=np.compat.long)
+
+
+    # get relations related to zero-hop concept keywords
+    hop_relation_dict = dict()
+    for hop_concept, hop_id, hop_dist in zip(hop_concepts, hop_index, hop_distances):
+        hop_relation_dict[(hop_concept, hop_id, hop_dist)] = set()
+        hop_rels = np_relations[np_head_ids == hop_id].tolist()
+        hop_relation_dict[(hop_concept, hop_id, hop_dist)] = set(hop_rels)
+
+    # augmentation start...
+    # find the relations that do not exist in the original, and then obtain new tail event using comet
+    all_relation_ids = _id2relation.keys()
+    for (hop_concept, hop_id, hop_dist), relation_ids in hop_relation_dict.items():
+        # old_relation_ids = [rel_id for rel_id in list(relation_ids) if rel_id in all_relation_ids] # existing relations
+        # new_relation_ids = all_relation_ids - old_relation_ids
+
+        new_relation_ids = all_relation_ids - relation_ids
+        new_relations = [_id2relation[rel] for rel in list(new_relation_ids)]  # non-existing relations
+
+        if hop_dist != 1 and len(new_relations) > max_new_rel_num:
+            new_relations = random.sample(new_relations, max_new_rel_num)
+
+        for rel in new_relations:
+            # obtain new tail event using comet inference
+            output_event = comet_inference(model, sampler, data_loader, text_encoder, hop_concept, rel)
+            if output_event not in concepts:
+                new_tail_id = len(concepts)
+                concepts.append(output_event)
+                labels.append(0)  # since new knowledge is not the target, label is 0
+                distances.append(
+                    hop_dist)  # if 0-hop keyword is augmented, distance is 1. In the case of 1-hop, distance would be 2.
+                head_ids.append(hop_id)
+                relations.append(_relation2id[rel])
+                tail_ids.append(new_tail_id)
+                triple_labels.append(0)  # since we are adding new knowledge, triple label would be just 0
+
+                if len(concepts) >= max_concept_num and len(head_ids) >= max_triple_num:
+                    break
+    # update kg values
+    kg['concepts'] = concepts
+    kg['labels'] = labels
+    kg['distances'] = distances
+    kg['relations'] = relations
+    kg['head_ids'] = head_ids
+    kg['tail_ids'] = tail_ids
+    kg['triple_labels'] = triple_labels
+
+    # print("")
+    # print("new concepts:", len(concepts), concepts)
+    # print("new labels:", len(labels), labels)
+    # print("new distances:", len(distances), distances)
+    # print("new head_ids:", len(head_ids), head_ids)
+    # print("new relations:", len(relations), relations)
+    # print("new tail_ids:", len(tail_ids), tail_ids)
+    # print("new triple_labels:", len(triple_labels), triple_labels)
+    # print("=================================================================")
+
+    _concepts += concepts
+    _data.append(kg)
 
 def augment_kg_triples(args, kgs):
     print("start augmenting kg triples...")
 
     model, sampler, data_loader, text_encoder = load_comet(args)
+    # print("number of cpu:", multiprocessing.cpu_count())
+    # assert False
 
     conceptnet_relations = data.conceptnet_data.conceptnet_relations
     _relation2id = dict()
@@ -127,6 +218,9 @@ def augment_kg_triples(args, kgs):
     # print("_relation2id:", _relation2id)
     # print("id2relation:", id2relation)
     # print("_id2relation:", _id2relation)
+    procs = []
+    pool = multiprocessing.Pool(args.num_proc)
+    start_time = time.perf_counter()
 
     max_new_rel_num = 3
     max_one_hop_concept_num = 30
@@ -158,67 +252,71 @@ def augment_kg_triples(args, kgs):
         np_relations = np.asarray(relations, dtype=np.compat.long)
         np_tail_ids = np.asarray(tail_ids, dtype=np.compat.long)
 
-        def _augment_kg(hop_concepts, hop_index, hop):
-            # get relations related to zero-hop concept keywords
-            hop_relation_dict = dict()
-            for hop_concept, hop_id in zip(hop_concepts, hop_index):
-                hop_relation_dict[(hop_concept, hop_id)] = set()
-                hop_rels = np_relations[np_head_ids == hop_id].tolist()
-                hop_relation_dict[(hop_concept, hop_id)] = set(hop_rels)
-
-            # augmentation start...
-            # find the relations that do not exist in the original, and then obtain new tail event using comet
-            all_relation_ids = _id2relation.keys()
-            for (hop_concept, hop_id), relation_ids in hop_relation_dict.items():
-                # old_relation_ids = [rel_id for rel_id in list(relation_ids) if rel_id in all_relation_ids] # existing relations
-                # new_relation_ids = all_relation_ids - old_relation_ids
-
-                new_relation_ids = all_relation_ids - relation_ids
-                new_relations = [_id2relation[rel] for rel in list(new_relation_ids)] # non-existing relations
-
-                if hop != 0 and len(new_relations) > max_new_rel_num:
-                    new_relations = random.sample(new_relations, max_new_rel_num)
-
-                for rel in new_relations:
-                    # obtain new tail event using comet inference
-                    output_event = comet_inference(model, sampler, data_loader, text_encoder, hop_concept, rel)
-                    if output_event not in concepts:
-                        new_tail_id = len(concepts)
-                        concepts.append(output_event)
-                        labels.append(0)  # since new knowledge is not the target, label is 0
-                        distances.append(hop+1)  # if 0-hop keyword is augmented, distance is 1. In the case of 1-hop, distance would be 2.
-                        head_ids.append(hop_id)
-                        relations.append(_relation2id[rel])
-                        tail_ids.append(new_tail_id)
-                        triple_labels.append(0)  # since we are adding new knowledge, triple label would be just 0
-
-                        if len(concepts) >= max_concept_num and len(head_ids) >= max_triple_num:
-                             break
+        # def _augment_kg(hop_concepts, hop_index, hop):
+        #     # get relations related to zero-hop concept keywords
+        #     hop_relation_dict = dict()
+        #     for hop_concept, hop_id in zip(hop_concepts, hop_index):
+        #         hop_relation_dict[(hop_concept, hop_id)] = set()
+        #         hop_rels = np_relations[np_head_ids == hop_id].tolist()
+        #         hop_relation_dict[(hop_concept, hop_id)] = set(hop_rels)
+        #
+        #     # augmentation start...
+        #     # find the relations that do not exist in the original, and then obtain new tail event using comet
+        #     all_relation_ids = _id2relation.keys()
+        #     for (hop_concept, hop_id), relation_ids in hop_relation_dict.items():
+        #         # old_relation_ids = [rel_id for rel_id in list(relation_ids) if rel_id in all_relation_ids] # existing relations
+        #         # new_relation_ids = all_relation_ids - old_relation_ids
+        #
+        #         new_relation_ids = all_relation_ids - relation_ids
+        #         new_relations = [_id2relation[rel] for rel in list(new_relation_ids)] # non-existing relations
+        #
+        #         if hop != 0 and len(new_relations) > max_new_rel_num:
+        #             new_relations = random.sample(new_relations, max_new_rel_num)
+        #
+        #         for rel in new_relations:
+        #             # obtain new tail event using comet inference
+        #             output_event = comet_inference(model, sampler, data_loader, text_encoder, hop_concept, rel)
+        #             if output_event not in concepts:
+        #                 new_tail_id = len(concepts)
+        #                 concepts.append(output_event)
+        #                 labels.append(0)  # since new knowledge is not the target, label is 0
+        #                 distances.append(hop+1)  # if 0-hop keyword is augmented, distance is 1. In the case of 1-hop, distance would be 2.
+        #                 head_ids.append(hop_id)
+        #                 relations.append(_relation2id[rel])
+        #                 tail_ids.append(new_tail_id)
+        #                 triple_labels.append(0)  # since we are adding new knowledge, triple label would be just 0
+        #
+        #                 if len(concepts) >= max_concept_num and len(head_ids) >= max_triple_num:
+        #                      break
 
         zero_hop_index = np.nonzero(np_distances == 0)[0].tolist()
-        zero_hop_concepts = np_concepts[zero_hop_index]
-        if len(zero_hop_concepts) > 0:
-            _augment_kg(zero_hop_concepts, zero_hop_index, 0)
+        zero_hop_concepts = np_concepts[zero_hop_index].tolist()
+        zero_hop_distances = [1] * len(zero_hop_concepts)
+        # if len(zero_hop_concepts) > 0:
+        #     _augment_kg(zero_hop_concepts, zero_hop_index, 0)
 
         one_hop_index = np.nonzero(np_distances == 1)[0].tolist()
-        one_hop_concepts = np_concepts[one_hop_index]
+        one_hop_concepts = np_concepts[one_hop_index].tolist()
 
-        if len(one_hop_concepts) > max_one_hop_concept_num:
-            one_hop_concepts = random.sample(one_hop_concepts.tolist(), max_one_hop_concept_num)
-        if len(one_hop_concepts) > 0:
-            _augment_kg(one_hop_concepts, one_hop_index, 1)
+        if len(one_hop_index) > max_one_hop_concept_num:
+            one_hop_index = random.sample(one_hop_index, max_one_hop_concept_num)
+            one_hop_concepts = np_concepts[one_hop_index].tolist()
+            assert len(one_hop_index) == len(one_hop_concepts)
+        one_hop_distances = [2] * len(one_hop_concepts)
 
-        # update kg values
-        kg['concepts'] = concepts
-        kg['labels'] = labels
-        kg['distances'] = distances
-        kg['relations'] = relations
-        kg['head_ids'] = head_ids
-        kg['tail_ids'] = tail_ids
-        kg['triple_labels'] = triple_labels
+        hop_index = zero_hop_index + one_hop_index
+        hop_concepts = zero_hop_concepts + one_hop_concepts
+        hop_distances = zero_hop_distances + one_hop_distances
+        # if len(one_hop_concepts) > 0:
+        #     _augment_kg(one_hop_concepts, one_hop_index, 1)
 
-        _concepts += concepts
-        _data.append(kg)
+        # print("zero_hop_concepts:", len(zero_hop_concepts), zero_hop_concepts)
+        # print("zero_hop_index:", len(zero_hop_index), zero_hop_index)
+        # print("one_hop_concepts:", len(one_hop_concepts), one_hop_concepts)
+        # print("one_hop_index:", len(one_hop_index), one_hop_index)
+        # assert False
+        # _concepts += concepts
+        # _data.append(kg)
         # print("")
         # print("new concepts:", len(concepts), concepts)
         # print("new labels:", len(labels), labels)
@@ -228,6 +326,21 @@ def augment_kg_triples(args, kgs):
         # print("new tail_ids:", len(tail_ids), tail_ids)
         # print("new triple_labels:", len(triple_labels), triple_labels)
         # print("=================================================================")
+
+        # proc =
+        # proc.start()
+        procs.append(pool.apply_async(func=_augment_kg, args=(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2relation,
+                                                        model, sampler, data_loader, text_encoder, max_new_rel_num,
+                                                        max_concept_num, max_triple_num, _concepts, _data, idx)))
+
+    # Joins all the processes
+    for p in tqdm.tqdm(procs, total=len(procs)):
+        p.get()
+    pool.close()
+    pool.join()
+    finish_time = time.perf_counter()
+    print("done")
+    print("len(_data):", len(_data), _data[:10])
     return _data, _concepts
 
 
@@ -267,9 +380,10 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="eg")
 
     # comet-inference
-    parser.add_argument("--device", type=str, default="cu")
+    parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--model_file", type=str, default="pretrained_models/conceptnet_pretrained_model.pickle")
     parser.add_argument("--sampling_algorithm", type=str, default="greedy", help="greedy, beam-#, top-#")
+    parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
 
     args = parser.parse_args()
     set_seed(42)
