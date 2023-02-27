@@ -222,7 +222,7 @@ def augment_kg_triples(args, kgs):
     pool = multiprocessing.Pool(args.num_proc)
     start_time = time.perf_counter()
     if torch.cuda.is_available():
-        multiprocessing.set_start_method('spawn')
+        multiprocessing.set_start_method('spawn', force=True)
     max_new_rel_num = 3
     max_one_hop_concept_num = 30
     max_concept_num = 300
