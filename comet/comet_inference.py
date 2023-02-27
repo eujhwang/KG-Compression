@@ -76,7 +76,7 @@ def load_kg(kg_path):
     return kgs
 
 
-def load_comet(args):
+def load_comet(args, device):
     opt, state_dict = interactive.load_model_file(args.model_file)
 
     data_loader, text_encoder = interactive.load_data("conceptnet", opt)
@@ -85,14 +85,14 @@ def load_comet(args):
     n_vocab = len(text_encoder.encoder) + n_ctx
 
     model = interactive.make_model(opt, n_vocab, n_ctx, state_dict)
-
-    if args.device != "cpu":
-        comet_cfg.device = int(args.device)
-        comet_cfg.do_gpu = True
-        torch.cuda.set_device(comet_cfg.device)
-        model.cuda(comet_cfg.device)
-    else:
-        comet_cfg.device = "cpu"
+    model = model.to(device)
+    # if args.device != "cpu":
+    #     comet_cfg.device = int(args.device)
+    #     comet_cfg.do_gpu = True
+    #     torch.cuda.set_device(comet_cfg.device)
+    #     model.cuda(comet_cfg.device)
+    # else:
+    #     comet_cfg.device = "cpu"
 
     sampling_algorithm = args.sampling_algorithm
     sampler = interactive.set_sampler(opt, sampling_algorithm, data_loader)
@@ -102,8 +102,8 @@ def load_comet(args):
     return model, sampler, data_loader, text_encoder
 
 
-def comet_inference(model, sampler, data_loader, text_encoder, input_event, relation):
-    outputs = interactive.get_conceptnet_sequence(input_event, model, sampler, data_loader, text_encoder, relation)
+def comet_inference(model, sampler, data_loader, text_encoder, input_event, relation, device):
+    outputs = interactive.get_conceptnet_sequence(input_event, model, sampler, data_loader, text_encoder, relation, device)
     # output: {'CapableOf': {'e1': 'juice', 'relation': 'CapableOf', 'beams': ['taste good', 'come from apple', 'come from fruit']}}
     output_event = outputs[relation]['beams'][0]
     # print("input_event:", input_event, "relation:", relation, "output_event:", output_event)
@@ -111,7 +111,7 @@ def comet_inference(model, sampler, data_loader, text_encoder, input_event, rela
 
 
 def _augment_kg(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2relation, model, sampler, data_loader, text_encoder,
-                max_new_rel_num, max_concept_num, max_triple_num, _concepts, _data, idx):
+                max_new_rel_num, max_concept_num, max_triple_num, _concepts, _data, device):
     c_proc = multiprocessing.current_process()
     # print("Running on Process",c_proc.name,"PID",c_proc.pid, "idx:", idx)
     concepts = kg['concepts']
@@ -161,7 +161,7 @@ def _augment_kg(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2re
 
         for rel in new_relations:
             # obtain new tail event using comet inference
-            output_event = comet_inference(model, sampler, data_loader, text_encoder, hop_concept, rel)
+            output_event = comet_inference(model, sampler, data_loader, text_encoder, hop_concept, rel, device)
             if output_event not in concepts:
                 new_tail_id = len(concepts)
                 concepts.append(output_event)
@@ -197,10 +197,10 @@ def _augment_kg(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2re
     _concepts += concepts
     _data.append(kg)
 
-def augment_kg_triples(args, kgs):
+def augment_kg_triples(args, kgs, device):
     print("start augmenting kg triples...")
 
-    model, sampler, data_loader, text_encoder = load_comet(args)
+    model, sampler, data_loader, text_encoder = load_comet(args, device)
 
     if torch.cuda.is_available():
         multiprocessing.set_start_method('spawn', force=True)
@@ -335,7 +335,7 @@ def augment_kg_triples(args, kgs):
         # proc.start()
         procs.append(pool.apply_async(func=_augment_kg, args=(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2relation,
                                                         model, sampler, data_loader, text_encoder, max_new_rel_num,
-                                                        max_concept_num, max_triple_num, _concepts, _data, idx)))
+                                                        max_concept_num, max_triple_num, _concepts, _data, device)))
 
     # Joins all the processes
     for p in tqdm.tqdm(procs, total=len(procs)):
@@ -365,7 +365,7 @@ def main(args):
     kgs = load_kg(kg_path)
 
     total_concepts = []
-    _data, _concepts = augment_kg_triples(args, kgs)
+    _data, _concepts = augment_kg_triples(args, kgs, device)
 
     total_concepts += _concepts
     print("kg_path:", os.path.basename(kg_path))

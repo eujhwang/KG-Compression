@@ -160,7 +160,7 @@ def set_atomic_inputs(input_event, category, data_loader, text_encoder):
     return batch
 
 
-def get_conceptnet_sequence(e1, model, sampler, data_loader, text_encoder, relation, force=False):
+def get_conceptnet_sequence(e1, model, sampler, data_loader, text_encoder, relation, device, force=False):
     if isinstance(relation, list):
         outputs = {}
 
@@ -193,6 +193,9 @@ def get_conceptnet_sequence(e1, model, sampler, data_loader, text_encoder, relat
             batch, abort = set_conceptnet_inputs(
                 e1, relation_sequence, text_encoder,
                 data_loader.max_e1, data_loader.max_r, force)
+
+            for key, value in batch.items():
+                batch[key] = value.to(device)
 
             if abort:
                 return {relation: sequence_all}
