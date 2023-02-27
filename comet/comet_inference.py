@@ -199,7 +199,13 @@ def _augment_kg(kg, hop_concepts, hop_index, hop_distances, _relation2id, _id2re
 
 def augment_kg_triples(args, kgs):
     print("start augmenting kg triples...")
+    procs = []
+    pool = multiprocessing.Pool(args.num_proc)
+    start_time = time.perf_counter()
+    if torch.cuda.is_available():
+        multiprocessing.set_start_method('spawn', force=True)
 
+        
     model, sampler, data_loader, text_encoder = load_comet(args)
     # print("number of cpu:", multiprocessing.cpu_count())
     # assert False
@@ -218,11 +224,7 @@ def augment_kg_triples(args, kgs):
     # print("_relation2id:", _relation2id)
     # print("id2relation:", id2relation)
     # print("_id2relation:", _id2relation)
-    procs = []
-    pool = multiprocessing.Pool(args.num_proc)
-    start_time = time.perf_counter()
-    if torch.cuda.is_available():
-        multiprocessing.set_start_method('spawn', force=True)
+
     max_new_rel_num = 3
     max_one_hop_concept_num = 30
     max_concept_num = 300
