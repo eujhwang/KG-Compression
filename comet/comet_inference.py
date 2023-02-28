@@ -10,6 +10,7 @@ import argparse
 import time
 from multiprocessing import Process
 
+import numpy
 import numpy as np
 import torch
 from collections import Counter
@@ -392,6 +393,7 @@ def augment_kg_triples(args, kgs, device):
 
 
 def save_json(data, filename):
+
     with open(filename, 'w') as f:
         for line in data:
             json.dump(line, f)
@@ -424,9 +426,9 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
             continue
 
         # np_concepts = np.asarray(concepts, dtype=str)
-        np_distances = np.asarray(distances, dtype=int)
-        np_head_ids = np.asarray(head_ids, dtype=int)
-        np_relations = np.asarray(relations, dtype=int)
+        np_distances = np.asarray(distances, dtype=numpy.int32)
+        np_head_ids = np.asarray(head_ids, dtype=numpy.int32)
+        np_relations = np.asarray(relations, dtype=numpy.int32)
 
         if len(head_ids) == 0:
             topk_head_ids = np.nonzero(np_distances == 0)[0]
@@ -437,8 +439,8 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
 
             zero_hop_ids = np.nonzero(np_distances == 0)[0].flatten()
             one_hop_ids = np.nonzero(np_distances == 1)[0].flatten()
+            one_hop_ids = set(head_ids).intersection(set(one_hop_ids))
             if len(one_hop_ids) > max_one_hop_concept_num:
-                one_hop_ids = set(head_ids).intersection(set(one_hop_ids))
                 one_hop_ids = random.sample(one_hop_ids, max_one_hop_concept_num)
 
             topk_head_ids = zero_hop_ids.tolist() + list(one_hop_ids)
@@ -521,17 +523,27 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv):
         qc = tuple(nv['qc'])
 
         if qc in all_concept_nv_dict.keys():
-            concepts = kg['concepts'] + all_concept_nv_dict[qc]['concepts']
-            labels = kg['labels'] + all_concept_nv_dict[qc]['labels']
-            distances = kg['distances'] + all_concept_nv_dict[qc]['distances']
-            head_ids = kg['head_ids'] + all_concept_nv_dict[qc]['head_ids']
-            tail_ids = kg['tail_ids'] + all_concept_nv_dict[qc]['tail_ids']
-            triple_labels = kg['triple_labels'] + all_concept_nv_dict[qc]['triple_labels']
+
+            new_concepts = all_concept_nv_dict[qc]['concepts']
+            new_labels = all_concept_nv_dict[qc]['labels']
+            new_distances = all_concept_nv_dict[qc]['distances']
+            new_head_ids = all_concept_nv_dict[qc]['head_ids']
+            new_tail_ids = all_concept_nv_dict[qc]['tail_ids']
+            new_triple_labels = all_concept_nv_dict[qc]['triple_labels']
+            new_relations = all_concept_nv_dict[qc]['relations']
+
+
+            concepts = kg['concepts'] + new_concepts
+            labels = kg['labels'] + new_labels
+            distances = kg['distances'] + new_distances
+            head_ids = kg['head_ids'] + [int(head_id) for head_id in new_head_ids]
+            tail_ids = kg['tail_ids'] + new_tail_ids
+            triple_labels = kg['triple_labels'] + new_triple_labels
             relations = kg['relations']
-            relations = [rel[0] for rel in relations] + all_concept_nv_dict[qc]['relations']
+            relations = [rel[0] for rel in relations] + new_relations# + [rel.astype(numpy.int32) for rel in new_relations]
 
             assert len(concepts) == len(distances) == len(labels)
-            assert len(head_ids) == len(tail_ids) == len(relations) == len(triple_labels)
+            # assert len(head_ids) == len(tail_ids) == len(relations) == len(triple_labels)
 
             _concepts += concepts
             _data.append({
@@ -544,14 +556,14 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv):
                 'triple_labels': triple_labels,
             })
 
-            print("new concepts:", len(concepts), concepts)
-            print("new labels:", len(labels), labels)
-            print("new distances:", len(distances), distances)
-            print("new head_ids:", len(head_ids), head_ids)
-            print("new relations:", len(tail_ids), tail_ids)
-            print("new tail_ids:", len(relations), relations)
-            print("new triple_labels:", len(triple_labels), triple_labels)
-
+            # print("new concepts:", len(concepts), type(concepts), concepts)
+            # print("new labels:", len(labels), type(labels), labels)
+            # print("new distances:", len(distances), type(distances), distances)
+            # print("new head_ids:", len(head_ids), type(head_ids), head_ids)
+            # print("new relations:", len(tail_ids), type(tail_ids), tail_ids)
+            # print("new tail_ids:", len(relations), type(relations), relations)
+            # print("new triple_labels:", len(triple_labels), type(triple_labels), triple_labels)
+            # assert False
         else:
             _concepts += concepts
             _data.append(kg)
