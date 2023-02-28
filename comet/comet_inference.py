@@ -501,7 +501,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
             #     print("concepts_nv_dict[qc].keys():", concepts_nv_dict[qc]["topk_head_ids"])
             #     print("diff:", diff)
             continue
-        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict_{args.start}_{args.end}_rel{args.max_rel_num}.pickle', 'wb'))
+        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict_{args.start}_{args.end}_rel{max_one_hop_concept_num}.pickle', 'wb'))
 
     return concepts_nv_dict
 
@@ -550,7 +550,7 @@ if __name__ == "__main__":
     parser.add_argument("--sampling_algorithm", type=str, default="greedy", help="greedy, beam-#, top-#")
     parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
     parser.add_argument("--start", type=int, default=0, help="number of processors")
-    parser.add_argument("--end", type=int, default=25596, help="number of processors")
+    parser.add_argument("--end", type=int, default=25597, help="number of processors")
     parser.add_argument("--max_one_hop_concept_num", type=int, default=10, help="number of processors")
 
     args = parser.parse_args()
