@@ -398,7 +398,7 @@ def save_json(data, filename):
             f.write('\n')
 
 
-def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH):
+def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH):
     concepts_nv_dict = dict()
 
     # [qc] = {'relations': kg['relations'],
@@ -406,6 +406,10 @@ def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encod
     #         'index': [indices]}
     all_relation_ids = id2relation.keys()
     max_one_hop_concept_num = 10
+
+    kgs = kgs[args.start: args.end]
+    concepts_nv = concepts_nv[args.start: args.end]
+
     for idx, (kg, nv) in tqdm.tqdm(enumerate(zip(kgs, concepts_nv)), total=len(kgs)):
         qc = tuple(nv['qc'])
         ac = nv['ac']
@@ -497,7 +501,7 @@ def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encod
             #     print("concepts_nv_dict[qc].keys():", concepts_nv_dict[qc]["topk_head_ids"])
             #     print("diff:", diff)
             continue
-        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
+        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict_{args.start}_{args.end}.pickle', 'wb'))
 
     return concepts_nv_dict
 
@@ -544,6 +548,9 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--model_file", type=str, default="pretrained_models/conceptnet_pretrained_model.pickle")
     parser.add_argument("--sampling_algorithm", type=str, default="greedy", help="greedy, beam-#, top-#")
+    parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
+    parser.add_argument("--start", type=int, default=0, help="number of processors")
+    parser.add_argument("--end", type=int, default=25596, help="number of processors")
     parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
 
     args = parser.parse_args()
