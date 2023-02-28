@@ -405,17 +405,17 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
     #         'ac': {ac},
     #         'index': [indices]}
     all_relation_ids = id2relation.keys()
-    max_one_hop_concept_num = 10
+    max_one_hop_concept_num = args.max_one_hop_concept_num
 
     kgs = kgs[args.start: args.end]
     concepts_nv = concepts_nv[args.start: args.end]
 
     for idx, (kg, nv) in tqdm.tqdm(enumerate(zip(kgs, concepts_nv)), total=len(kgs)):
         qc = tuple(nv['qc'])
-        ac = nv['ac']
+        # ac = nv['ac']
         concepts = kg['concepts']
         head_ids = kg['head_ids']
-        tail_ids = kg['tail_ids']
+        # tail_ids = kg['tail_ids']
         distances = kg['distances']
         relations = kg['relations']
         relations = [rel[0] for rel in relations]
@@ -423,7 +423,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
         if len(concepts) == 0:
             continue
 
-        np_concepts = np.asarray(concepts, dtype=str)
+        # np_concepts = np.asarray(concepts, dtype=str)
         np_distances = np.asarray(distances, dtype=int)
         np_head_ids = np.asarray(head_ids, dtype=int)
         np_relations = np.asarray(relations, dtype=int)
@@ -431,7 +431,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
         if len(head_ids) == 0:
             topk_head_ids = np.nonzero(np_distances == 0)[0]
         else:
-            head_ids_by_freq = sorted(Counter(head_ids).items(), key=lambda x: x[1], reverse=True)
+            # head_ids_by_freq = sorted(Counter(head_ids).items(), key=lambda x: x[1], reverse=True)
             # topk_head_ids = head_ids_by_freq[:10]
             # topk_head_ids = np.array(topk_head_ids, dtype=int)[:, 0]  # [:, 1] is frequency
 
@@ -501,7 +501,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
             #     print("concepts_nv_dict[qc].keys():", concepts_nv_dict[qc]["topk_head_ids"])
             #     print("diff:", diff)
             continue
-        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict_{args.start}_{args.end}.pickle', 'wb'))
+        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict_{args.start}_{args.end}_rel{args.max_rel_num}.pickle', 'wb'))
 
     return concepts_nv_dict
 
@@ -551,6 +551,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
     parser.add_argument("--start", type=int, default=0, help="number of processors")
     parser.add_argument("--end", type=int, default=25596, help="number of processors")
+    parser.add_argument("--max_one_hop_concept_num", type=int, default=10, help="number of processors")
 
     args = parser.parse_args()
     set_seed(42)
