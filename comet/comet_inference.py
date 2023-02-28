@@ -492,7 +492,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
                 "triple_labels": new_triple_labels,
                 "topk_head_ids": topk_head_ids,
             }
-            print("concepts_nv_dict:", concepts_nv_dict[qc])
+            # print("concepts_nv_dict:", concepts_nv_dict[qc])
         else:
             # TODO -- later enable!!
             # diff = set(topk_head_ids) - set(concepts_nv_dict[qc]["topk_head_ids"])
