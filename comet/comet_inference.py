@@ -521,7 +521,7 @@ def main(args):
     assert len(kgs) == len(concepts_nv)
     # print("concepts_nv:", concepts_nv)
     model, sampler, data_loader, text_encoder = load_comet(args.model_file, args.sampling_algorithm, device)
-    concepts_nv_dict = aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH)
+    concepts_nv_dict = aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH)
 
     pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
 
