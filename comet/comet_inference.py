@@ -551,7 +551,6 @@ if __name__ == "__main__":
     parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
     parser.add_argument("--start", type=int, default=0, help="number of processors")
     parser.add_argument("--end", type=int, default=25596, help="number of processors")
-    parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
 
     args = parser.parse_args()
     set_seed(42)
