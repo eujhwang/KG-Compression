@@ -473,7 +473,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
                     # obtain new tail event using comet inference
                     output_event = comet_inference(model, sampler, data_loader, text_encoder, concepts[head_id], rname, device)
                     if output_event not in concepts and output_event not in new_concepts:
-                        new_tail_id = len(concepts)
+                        new_tail_id = len(concepts) + len(new_concepts)
                         new_concepts.append(output_event)
                         new_labels.append(0)  # since new knowledge is not the target, label is 0
                         new_distances.append(distance)  # if 0-hop keyword is augmented, distance is 1. In the case of 1-hop, distance would be 2.
@@ -492,7 +492,7 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
                 "triple_labels": new_triple_labels,
                 "topk_head_ids": topk_head_ids,
             }
-            # print("concepts_nv_dict:", concepts_nv_dict[qc])
+            print("concepts_nv_dict:", concepts_nv_dict[qc])
         else:
             # TODO -- later enable!!
             # diff = set(topk_head_ids) - set(concepts_nv_dict[qc]["topk_head_ids"])
@@ -505,6 +505,57 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
 
     return concepts_nv_dict
 
+
+def merge_concept_nv_dict(dir, kgs, concepts_nv):
+    files = os.listdir(dir)
+    all_concept_nv_dict = dict()
+    for file in files:
+        if file.endswith(".pickle"):
+            with open(os.path.join(dir, file), 'rb') as f:
+                concept_nv_dict = pickle.load(f)
+                all_concept_nv_dict.update(concept_nv_dict)
+
+    print("len(all_concept_nv_dict.keys()):", len(all_concept_nv_dict.keys()))
+    _data, _concepts = [], []
+    for kg, nv in tqdm.tqdm(zip(kgs, concepts_nv), total=len(kgs)):
+        qc = tuple(nv['qc'])
+
+        if qc in all_concept_nv_dict.keys():
+            concepts = kg['concepts'] + all_concept_nv_dict[qc]['concepts']
+            labels = kg['labels'] + all_concept_nv_dict[qc]['labels']
+            distances = kg['distances'] + all_concept_nv_dict[qc]['distances']
+            head_ids = kg['head_ids'] + all_concept_nv_dict[qc]['head_ids']
+            tail_ids = kg['tail_ids'] + all_concept_nv_dict[qc]['tail_ids']
+            triple_labels = kg['triple_labels'] + all_concept_nv_dict[qc]['triple_labels']
+            relations = kg['relations']
+            relations = [rel[0] for rel in relations] + all_concept_nv_dict[qc]['relations']
+
+            assert len(concepts) == len(distances) == len(labels)
+            assert len(head_ids) == len(tail_ids) == len(relations) == len(triple_labels)
+
+            _concepts += concepts
+            _data.append({
+                'concepts': concepts,
+                'labels': labels,
+                'distances': distances,
+                'head_ids': head_ids,
+                'tail_ids': tail_ids,
+                'relations': relations,
+                'triple_labels': triple_labels,
+            })
+
+            print("new concepts:", len(concepts), concepts)
+            print("new labels:", len(labels), labels)
+            print("new distances:", len(distances), distances)
+            print("new head_ids:", len(head_ids), head_ids)
+            print("new relations:", len(tail_ids), tail_ids)
+            print("new tail_ids:", len(relations), relations)
+            print("new triple_labels:", len(triple_labels), triple_labels)
+
+        else:
+            _concepts += concepts
+            _data.append(kg)
+    return _data, _concepts
 
 
 def main(args):
@@ -520,29 +571,38 @@ def main(args):
 
     assert len(kgs) == len(concepts_nv)
     # print("concepts_nv:", concepts_nv)
-    model, sampler, data_loader, text_encoder = load_comet(args.model_file, args.sampling_algorithm, device)
-    concepts_nv_dict = aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH)
+    if args.merge:
+        dir = DATA_PATH + "/concepts_nv_dict/"
+        total_concepts = []
+        _data, _concepts = merge_concept_nv_dict(dir, kgs, concepts_nv)
+        total_concepts += _concepts
+        print("kg_path:", os.path.basename(kg_path))
+        new_kg_file = ".".join(["augmented", os.path.basename(kg_path)])
 
-    pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
+        save_json(_data, DATA_PATH + f'/{new_kg_file}')
 
-    # total_concepts = []
+        words_by_frequency = sorted(Counter(total_concepts).items(), key=lambda x: x[1], reverse=True)
+        print('total word counts: ', len(words_by_frequency))
+        with open(DATA_PATH + '/augmented.kg_vocab.txt', 'w') as vocab_file:
+            for word, frequency in words_by_frequency:
+                vocab_file.write('{} {}\n'.format(word, frequency))
+
+    if args.inference:
+        model, sampler, data_loader, text_encoder = load_comet(args.model_file, args.sampling_algorithm, device)
+        concepts_nv_dict = aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text_encoder, device,
+                                              DATA_PATH)
+    # pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
+
+
     # _data, _concepts = augment_kg_triples(args, kgs, device)
     #
-    # total_concepts += _concepts
-    # print("kg_path:", os.path.basename(kg_path))
-    # new_kg_file = ".".join(["augmented", os.path.basename(kg_path)])
-    #
-    # save_json(_data, DATA_PATH + f'/{new_kg_file}')
-    #
-    # words_by_frequency = sorted(Counter(total_concepts).items(), key=lambda x: x[1], reverse=True)
-    # print('total word counts: ', len(words_by_frequency))
-    # with open(DATA_PATH + '/augmented.kg_vocab.txt', 'w') as vocab_file:
-    #     for word, frequency in words_by_frequency:
-    #         vocab_file.write('{} {}\n'.format(word, frequency))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="eg")
+    parser.add_argument("--merge", action="store_true", help="merge inference outputs")
+    parser.add_argument("--inference", action="store_true", help="start comet inference")
 
     # comet-inference
     parser.add_argument("--device", type=str, default="cpu")
