@@ -398,7 +398,7 @@ def save_json(data, filename):
             f.write('\n')
 
 
-def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encoder, device):
+def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH):
     concepts_nv_dict = dict()
 
     # [qc] = {'relations': kg['relations'],
@@ -488,7 +488,7 @@ def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encod
                 "triple_labels": new_triple_labels,
                 "topk_head_ids": topk_head_ids,
             }
-            print("concepts_nv_dict:", concepts_nv_dict[qc])
+            # print("concepts_nv_dict:", concepts_nv_dict[qc])
         else:
             # TODO -- later enable!!
             # diff = set(topk_head_ids) - set(concepts_nv_dict[qc]["topk_head_ids"])
@@ -497,6 +497,7 @@ def aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encod
             #     print("concepts_nv_dict[qc].keys():", concepts_nv_dict[qc]["topk_head_ids"])
             #     print("diff:", diff)
             continue
+        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
 
     return concepts_nv_dict
 
@@ -516,7 +517,7 @@ def main(args):
     assert len(kgs) == len(concepts_nv)
     # print("concepts_nv:", concepts_nv)
     model, sampler, data_loader, text_encoder = load_comet(args.model_file, args.sampling_algorithm, device)
-    concepts_nv_dict = aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encoder, device)
+    concepts_nv_dict = aggregate_concepts(kgs, concepts_nv, model, sampler, data_loader, text_encoder, device, DATA_PATH)
 
     pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
 
