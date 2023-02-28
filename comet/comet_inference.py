@@ -23,7 +23,7 @@ import comet.src.data.config as comet_cfg
 import comet.src.interactive.functions as interactive
 
 config = configparser.ConfigParser()
-config.read("../preprocess/paths.cfg")
+config.read("preprocess/paths.cfg")
 
 # cpnet = None
 # cpnet_simple = None
