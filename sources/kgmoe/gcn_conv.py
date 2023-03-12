@@ -101,7 +101,7 @@ class GCNConv(MessagePassing):
     def forward(self, x: Tensor, edge_index: Adj, triple_label: OptTensor = None,
                 edge_weight: OptTensor = None) -> Tensor:
         """"""
-        perm = (triple_label == -1).nonzero().shape[0]
+        perm = torch.nonzer((triple_label == -1)).shape[0]
 
         if (triple_label == -1).any().item():
             edge_index = edge_index[:, :-perm]
