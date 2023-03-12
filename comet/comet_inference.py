@@ -78,7 +78,7 @@ def load_resources():
 
 
 def load_kg(kg_path):
-    print("loading train.kg.json...", end="")
+    print(f"loading {kg_path}...", end="")
     kgs = []
     with open(kg_path, 'r') as f:
         for line in f.readlines():
@@ -88,7 +88,7 @@ def load_kg(kg_path):
     return kgs
 
 def load_concepts_nv(concepts_nv_path):
-    print("loading train.concepts_nv.json...", end="")
+    print(f"loading {concepts_nv_path}...", end="")
     concepts_nv = []
     with open(concepts_nv_path, 'r') as f:
         for line in f.readlines():
@@ -409,7 +409,12 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
     all_relation_ids = id2relation.keys()
     max_one_hop_concept_num = args.max_one_hop_concept_num
 
-    kgs = kgs[args.start: args.end]
+    if args.end > len(kgs):
+        end = len(kgs)
+    else:
+        end = args.end
+
+    kgs = kgs[args.start: end]
     concepts_nv = concepts_nv[args.start: args.end]
 
     for idx, (kg, nv) in tqdm.tqdm(enumerate(zip(kgs, concepts_nv)), total=len(kgs)):
@@ -503,35 +508,74 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
             #     print("concepts_nv_dict[qc].keys():", concepts_nv_dict[qc]["topk_head_ids"])
             #     print("diff:", diff)
             continue
-        pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict_{args.start}_{args.end}_rel{max_one_hop_concept_num}.pickle', 'wb'))
 
     return concepts_nv_dict
 
 
-def merge_concept_nv_dict(dir, kgs, concepts_nv):
+def merge_concept_nv_dict(dir, kgs, concepts_nv, type):
     files = os.listdir(dir)
     all_concept_nv_dict = dict()
     for file in files:
-        if file.endswith(".pickle"):
+        if file.startswith(type) and file.endswith(".pickle"):
             with open(os.path.join(dir, file), 'rb') as f:
                 concept_nv_dict = pickle.load(f)
                 all_concept_nv_dict.update(concept_nv_dict)
 
     print("len(all_concept_nv_dict.keys()):", len(all_concept_nv_dict.keys()))
     _data, _concepts = [], []
+    max_num_tokens = 1
     for kg, nv in tqdm.tqdm(zip(kgs, concepts_nv), total=len(kgs)):
         qc = tuple(nv['qc'])
 
         if qc in all_concept_nv_dict.keys():
 
-            new_concepts = all_concept_nv_dict[qc]['concepts']
-            new_labels = all_concept_nv_dict[qc]['labels']
-            new_distances = all_concept_nv_dict[qc]['distances']
-            new_head_ids = all_concept_nv_dict[qc]['head_ids']
-            new_tail_ids = all_concept_nv_dict[qc]['tail_ids']
-            new_triple_labels = all_concept_nv_dict[qc]['triple_labels']
-            new_relations = all_concept_nv_dict[qc]['relations']
+            concepts = all_concept_nv_dict[qc]['concepts']
+            labels = all_concept_nv_dict[qc]['labels']
+            distances = all_concept_nv_dict[qc]['distances']
+            head_ids = all_concept_nv_dict[qc]['head_ids']
+            tail_ids = all_concept_nv_dict[qc]['tail_ids']
+            triple_labels = all_concept_nv_dict[qc]['triple_labels']
+            relations = all_concept_nv_dict[qc]['relations']
 
+            assert len(concepts) == len(labels) == len(distances)
+
+            new_concepts = []
+            new_labels = []
+            new_distances = []
+            new_head_ids = []
+            new_tail_ids = []
+            new_triple_labels = []
+            new_relations = []
+            invalid_concept_index = []
+            for i in range(len(concepts)):
+                concept = concepts[i]
+                label = labels[i]
+                dist = distances[i]
+                # head_id = _head_ids[i]
+                # tail_id = _tail_ids[i]
+                # triple_label = _triple_labels[i]
+                # relation = _relations[i]
+                if len(concept.split(" ")) > max_num_tokens:
+                    print("concept:", concept)
+                    invalid_concept_index.append(i)
+                else:
+                    new_concepts.append(concept)
+                    new_labels.append(label)
+                    new_distances.append(dist)
+                    # new_head_ids.append(head_id)
+                    # new_tail_ids.append(tail_id)
+                    # new_triple_labels.append(triple_label)
+                    # new_relations.append(relation)
+            print("invalid_concept_index:", invalid_concept_index)
+            for head_id, tail_id, relation, triple_label in zip(head_ids, tail_ids, relations, triple_labels):
+                if head_id in invalid_concept_index or tail_id in invalid_concept_index:
+                    continue
+                new_head_ids.append(head_id)
+                new_tail_ids.append(tail_id)
+                new_relations.append(relation)
+                new_triple_labels.append(triple_label)
+
+            assert len(new_head_ids) == len(new_tail_ids) == len(new_relations) == len(new_triple_labels)
 
             concepts = kg['concepts'] + new_concepts
             labels = kg['labels'] + new_labels
@@ -565,8 +609,10 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv):
             # print("new triple_labels:", len(triple_labels), type(triple_labels), triple_labels)
             # assert False
         else:
+            print("qc:", qc)
             _concepts += concepts
             _data.append(kg)
+
     return _data, _concepts
 
 
@@ -574,24 +620,44 @@ def main(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     dataset = args.data_dir
     DATA_PATH = config["paths"][dataset + "_dir"]
-    kg_path = DATA_PATH + "/train.kg.json"
-    concepts_nv_path = DATA_PATH + "/train.concepts_nv.json"
+    # kg_path = DATA_PATH + "/train.kg.json"
+    # concepts_nv_path = DATA_PATH + "/train.concepts_nv.json"
 
     load_resources()
-    kgs = load_kg(kg_path)
-    concepts_nv = load_concepts_nv(concepts_nv_path)
+    # kgs = load_kg(kg_path)
+    # concepts_nv = load_concepts_nv(concepts_nv_path)
 
-    assert len(kgs) == len(concepts_nv)
-    # print("concepts_nv:", concepts_nv)
+    if args.inference:
+        type = args.type
+        kg_path = DATA_PATH + f"/{type}.kg.json"
+        concepts_nv_path = DATA_PATH + f"/{type}.concepts_nv.json"
+        kgs = load_kg(kg_path)
+        concepts_nv = load_concepts_nv(concepts_nv_path)
+        assert len(kgs) == len(concepts_nv)
+
+        model, sampler, data_loader, text_encoder = load_comet(args.model_file, args.sampling_algorithm, device)
+        concepts_nv_dict = aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text_encoder, device,
+                                              DATA_PATH)
+        pickle.dump(concepts_nv_dict,
+                    open(DATA_PATH + f'/{type}.concepts_nv_dict_{args.start}_{args.end}_rel{args.max_one_hop_concept_num}.pickle',
+                         'wb'))
     if args.merge:
         dir = DATA_PATH + "/concepts_nv_dict/"
         total_concepts = []
-        _data, _concepts = merge_concept_nv_dict(dir, kgs, concepts_nv)
-        total_concepts += _concepts
-        print("kg_path:", os.path.basename(kg_path))
-        new_kg_file = ".".join(["augmented", os.path.basename(kg_path)])
+        for type in ["train", "val", "test"]:
+            kg_path = DATA_PATH + f"/{type}.kg.json"
+            concepts_nv_path = DATA_PATH + f"/{type}.concepts_nv.json"
+            kgs = load_kg(kg_path)
+            concepts_nv = load_concepts_nv(concepts_nv_path)
+            assert len(kgs) == len(concepts_nv)
 
-        save_json(_data, DATA_PATH + f'/{new_kg_file}')
+            _data, _concepts = merge_concept_nv_dict(dir, kgs, concepts_nv, type)
+            print("data:", len(_data), "concepts:", len(_concepts))
+            total_concepts += _concepts
+            print("kg_path:", os.path.basename(kg_path))
+            new_kg_file = ".".join(["augmented", os.path.basename(kg_path)])
+
+            save_json(_data, DATA_PATH + f'/{new_kg_file}')
 
         words_by_frequency = sorted(Counter(total_concepts).items(), key=lambda x: x[1], reverse=True)
         print('total word counts: ', len(words_by_frequency))
@@ -599,20 +665,11 @@ def main(args):
             for word, frequency in words_by_frequency:
                 vocab_file.write('{} {}\n'.format(word, frequency))
 
-    if args.inference:
-        model, sampler, data_loader, text_encoder = load_comet(args.model_file, args.sampling_algorithm, device)
-        concepts_nv_dict = aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text_encoder, device,
-                                              DATA_PATH)
-    # pickle.dump(concepts_nv_dict, open(DATA_PATH + f'/concepts_nv_dict.pickle', 'wb'))
-
-
-    # _data, _concepts = augment_kg_triples(args, kgs, device)
-    #
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="eg")
+    parser.add_argument("--type", type=str, default="train", choices=["train", "val", "test"])
     parser.add_argument("--merge", action="store_true", help="merge inference outputs")
     parser.add_argument("--inference", action="store_true", help="start comet inference")
 
@@ -623,7 +680,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_proc", type=int, default=5, help="number of processors")
     parser.add_argument("--start", type=int, default=0, help="number of processors")
     parser.add_argument("--end", type=int, default=25597, help="number of processors")
-    parser.add_argument("--max_one_hop_concept_num", type=int, default=10, help="number of processors")
+    parser.add_argument("--max_one_hop_concept_num", type=int, default=30, help="number of processors")
 
     args = parser.parse_args()
     set_seed(42)
