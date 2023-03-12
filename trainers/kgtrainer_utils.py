@@ -274,7 +274,7 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         elif self.augment:
             max_concept_length = 400
             max_oracle_concept_length = 30
-            max_triple_len = 700
+            max_triple_len = 750
         else:
             ######################## old ########################
             # FIXME: we should address all relations, not just taking random one relation out of all relations
