@@ -479,6 +479,10 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
 
                     # obtain new tail event using comet inference
                     output_event = comet_inference(model, sampler, data_loader, text_encoder, concepts[head_id], rname, device)
+
+                    if len(output_event.split(" ")) > 1:
+                        continue
+
                     if output_event not in concepts and output_event not in new_concepts:
                         new_tail_id = len(concepts) + len(new_concepts)
                         new_concepts.append(output_event)
