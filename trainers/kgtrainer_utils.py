@@ -272,7 +272,7 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
             max_triple_len = 850
             ######################## new ########################
         elif self.augment:
-            max_concept_length = 350
+            max_concept_length = 400
             max_oracle_concept_length = 30
             max_triple_len = 700
         else:
