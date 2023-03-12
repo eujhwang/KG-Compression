@@ -83,14 +83,15 @@ def load_kg_vocab(path, tokenizer):
     with open(path, 'r') as f:
         for line in f.readlines():
             vocab, _ = line.strip().split()
-            tokenized_vocab = tokenizer.encode(
-                ' '+vocab, add_special_tokens=False)
+            tokenized_vocab = tokenizer.encode(' '+vocab, add_special_tokens=False)
             if len(tokenized_vocab) > 1:
                 print('not covered vocab: ', vocab, tokenized_vocab)
-            if concept2id.get(vocab):
+                tokenizer.add_tokens(' '+vocab)
+                tokenized_vocab = tokenizer.encode(' '+vocab, add_special_tokens=False)
+            elif concept2id.get(vocab):
                 print('duplicated vocab: ', vocab, tokenized_vocab)
             concept2id[vocab] = tokenized_vocab[0]
-    return concept2id
+    return concept2id, len(tokenizer)
 
 
 class AbstractSeq2SeqDataset(Dataset):
@@ -104,6 +105,8 @@ class AbstractSeq2SeqDataset(Dataset):
         n_obs=None,
         prefix="",
         extend_relation=None,
+        augment=None,
+        concept2id=None,
         **dataset_kwargs
     ):
         super().__init__()
@@ -124,12 +127,18 @@ class AbstractSeq2SeqDataset(Dataset):
             self.used_char_len = True
         self.max_source_length = max_source_length
         self.max_target_length = max_target_length
+        self.augment = augment
 
         ## load KG file
-        self.kg_vocab = Path(data_dir).joinpath("kg_vocab.txt")
-        self.concept2id = load_kg_vocab(self.kg_vocab, tokenizer)
-
-        self.kg_path = Path(data_dir).joinpath(type_path + ".kg.json")
+        if self.augment:
+            # self.kg_vocab = Path(data_dir).joinpath("augmented.kg_vocab.txt")
+            # self.concept2id = load_kg_vocab(self.kg_vocab, tokenizer)
+            self.kg_path = Path(data_dir).joinpath("augmented." + type_path + ".kg.json")
+        else:
+            # self.kg_vocab = Path(data_dir).joinpath("kg_vocab.txt")
+            # self.concept2id = load_kg_vocab(self.kg_vocab, tokenizer)
+            self.kg_path = Path(data_dir).joinpath(type_path + ".kg.json")
+        self.concept2id = concept2id
 
         self.concepts = []
         self.concepts_labels = []
@@ -262,6 +271,10 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
             max_oracle_concept_length = 30
             max_triple_len = 850
             ######################## new ########################
+        elif self.augment:
+            max_concept_length = 350
+            max_oracle_concept_length = 30
+            max_triple_len = 700
         else:
             ######################## old ########################
             # FIXME: we should address all relations, not just taking random one relation out of all relations

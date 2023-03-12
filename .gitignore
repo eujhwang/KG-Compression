@@ -24,3 +24,4 @@ comet/src/evaluate/__pycache__
 comet/model/
 comet/pretrained_models
 comet/data/
+*.pyc

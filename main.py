@@ -2,6 +2,7 @@ import logging
 import os, sys
 import json
 import random
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -15,6 +16,7 @@ from transformers import (
     # set_seed,
 )
 
+from trainers.kgtrainer_utils import load_kg_vocab
 from trainers.trainer_utils import (
     assert_all_frozen,
     freeze_embeds,
@@ -100,6 +102,7 @@ class DataTrainingArguments:
     opt_loss_ratio: Optional[float] = field(default=0.3, metadata={"help": "specify a token as expert token"})
     use_wandb: Optional[bool] = field(default=False, metadata={"help": "whether use wandb or not."})
     extend_relation: Optional[bool] = field(default=False, metadata={"help": "whether to extend relation or not."})
+    augment: Optional[bool] = field(default=False, metadata={"help": "whether to augment the graph or not."})
     assign_ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
     pool_type: Optional[str] = field(default="sag", metadata={"help": "pooling method 'sag', 'copooling'"},)
 
@@ -214,12 +217,22 @@ def main():
         config.assign_ratio = data_args.assign_ratio
         config.pool_type = data_args.pool_type
 
+    ## load KG file
+    if data_args.augment:
+        kg_vocab = Path(data_args.data_dir).joinpath("augmented.kg_vocab.txt")
+        concept2id, tokenizer_len = load_kg_vocab(kg_vocab, tokenizer)
+    else:
+        kg_vocab = Path(data_args.data_dir).joinpath("kg_vocab.txt")
+        concept2id, tokenizer_len = load_kg_vocab(kg_vocab, tokenizer)
+
     model = BartModel.from_pretrained(
         model_args.model_name_or_path,
         from_tf=".ckpt" in model_args.model_name_or_path,
         config=config,
         cache_dir=model_args.cache_dir,
     )
+    model.resize_token_embeddings(tokenizer_len)
+
     if data_args.use_wandb:
         wandb.watch(model)
 
@@ -246,6 +259,8 @@ def main():
             max_source_length=data_args.max_source_length,
             prefix=model.config.prefix or "",
             extend_relation=data_args.extend_relation,
+            augment=data_args.augment,
+            concept2id=concept2id,
         )
         if training_args.do_train
         else None
@@ -261,6 +276,8 @@ def main():
             max_source_length=data_args.max_source_length,
             prefix=model.config.prefix or "",
             extend_relation=data_args.extend_relation,
+            augment=data_args.augment,
+            concept2id=concept2id,
         )
         if training_args.do_eval or training_args.evaluation_strategy != EvaluationStrategy.NO
         else None
@@ -276,6 +293,8 @@ def main():
             max_source_length=data_args.max_source_length,
             prefix=model.config.prefix or "",
             extend_relation=data_args.extend_relation,
+            augment=data_args.augment,
+            concept2id=concept2id,
         )
         if training_args.do_predict
         else None
