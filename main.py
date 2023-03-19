@@ -104,7 +104,7 @@ class DataTrainingArguments:
     extend_relation: Optional[bool] = field(default=False, metadata={"help": "whether to extend relation or not."})
     augment: Optional[bool] = field(default=False, metadata={"help": "whether to augment the graph or not."})
     assign_ratio: Optional[float] = field(default=0.5, metadata={"help": "ratio for sag pooling"})
-    pool_type: Optional[str] = field(default="sag", metadata={"help": "pooling method 'sag', 'copooling'"},)
+    pool_type: Optional[str] = field(default="sag", metadata={"help": "pooling method 'sag', 'copooling', 'none'"},)
 
 def set_seed(seed: int):
     """ Set all seeds to make results reproducible (deterministic mode).

@@ -132,8 +132,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                 scaled_loss.backward()
         else:
             loss.backward()
-        del lm_loss, kg_loss, opt_loss
-        return loss.detach()
+
+        return loss.detach(), lm_loss, kg_loss, opt_loss
 
     def compute_loss(self, model, inputs):
         # labels=target_ids, concept_labels (if label in source subgraph is one of target concpets)

@@ -281,6 +281,7 @@ class Seq2SeqTrainer(Trainer):
 
             epoch_pbar = tqdm(epoch_iterator, desc="Iteration", disable=disable_tqdm)
             losses = []
+            lm_losses, kg_losses, opt_losses = [], [], []
             for step, inputs in enumerate(epoch_iterator):
 
                 # Skip past any already trained steps if resuming training
@@ -288,8 +289,11 @@ class Seq2SeqTrainer(Trainer):
                     steps_trained_in_current_epoch -= 1
                     epoch_pbar.update(1)
                     continue
-                loss = self.training_step(model, inputs)
+                loss, lm_loss, kg_loss, opt_loss = self.training_step(model, inputs)
                 losses.append(loss.item())
+                lm_losses.append(lm_loss.item())
+                kg_losses.append(kg_loss.item())
+                opt_losses.append(opt_loss)
                 tr_loss += loss
                 self.total_flos += self.floating_point_ops(inputs)
 
@@ -322,6 +326,9 @@ class Seq2SeqTrainer(Trainer):
                     break
             if self.data_args.use_wandb:
                 wandb.log({"[Train] Epoch": epoch+1, "[Train] Loss": sum(losses) / len(losses),
+                           "[Train] LM Loss": sum(lm_losses) / len(lm_losses),
+                           "[Train] KG Loss": sum(kg_losses) / len(kg_losses),
+                           "[Train] OPT Loss": sum(opt_losses) / len(opt_losses),
                            "[Train] Elapsed Time:": (time.time() - epoch_start_time)})
             epoch_pbar.close()
             train_pbar.update(1)

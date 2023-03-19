@@ -272,22 +272,34 @@ class GraphEncoder(nn.Module):
             mixture_embed = self.mixture_embed(mixture_ids) # [60*3, 300, 768]
             memory = memory + 1.0 * mixture_embed
 
-        ###################################### start of sag_pooling ######################################
-        concept_hidden = memory
-        relation_hidden = rel_repr
-        concept_hidden_list = [memory]
-        # _concept_hidden = memory
-        for i in range(self.hop_number):
-            concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
-            # _concept_hidden = _concept_hidden + concept_hidden
-            concept_hidden_list.append(concept_hidden)
-        node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
-        node_repr = self.node_linear(node_repr)
-
         if self.pool_type == "sag":
-            node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
+            ###################################### start of sag_pooling ######################################
+            concept_hidden = memory
+            relation_hidden = rel_repr
+            concept_hidden_list = [memory]
+            # _concept_hidden = memory
+            for i in range(self.hop_number):
+                concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
+                # _concept_hidden = _concept_hidden + concept_hidden
+                concept_hidden_list.append(concept_hidden)
+            node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
+            node_repr = self.node_linear(node_repr)
+            pooled_node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
                                                                       triple_label, concept_labels, concept_ids)
-        ###################################### end of sag_pooling ######################################
+            ###################################### end of sag_pooling ######################################
+        else:
+            concept_hidden = memory
+            relation_hidden = rel_repr
+            concept_hidden_list = [memory]
+            # _concept_hidden = memory
+            for i in range(self.hop_number):
+                concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail,
+                                                                triple_label, i)
+                # _concept_hidden = _concept_hidden + concept_hidden
+                concept_hidden_list.append(concept_hidden)
+            node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
+            node_repr = self.node_linear(node_repr)
+            pooled_node_repr = None
 
         ###################################### start of co_pooling ######################################
         # concept_hidden = memory
@@ -299,11 +311,10 @@ class GraphEncoder(nn.Module):
         # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
         # node_repr = self.node_linear(node_repr)
         #
-        if self.pool_type == "copooling":
-            node_repr, concept_labels, concept_ids = self.copooling(concept_hidden, relation_hidden, head, tail,
-                                                                    triple_label, concept_labels, concept_ids)
+        # if self.pool_type == "copooling":
+        #     node_repr, concept_labels, concept_ids = self.copooling(concept_hidden, relation_hidden, head, tail,
+        #                                                             triple_label, concept_labels, concept_ids)
         ###################################### end of co_pooling ######################################
-
 
         ###################################### start of Coarsening ######################################
         # coarse_x = memory
@@ -347,7 +358,7 @@ class GraphEncoder(nn.Module):
         ###################################### end of original ######################################
 
         # concept_ids is needed for generating step.
-        return node_repr.to(memory.device), memory, concept_labels, concept_ids
+        return pooled_node_repr.to(memory.device), node_repr, concept_labels, concept_ids
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 
