@@ -28,9 +28,9 @@ class GraphEncoder(nn.Module):
         print("assign_ratio:", self.assign_ratio, "num_mixtures:", self.num_mixtures, "pool_type:", self.pool_type)
         # self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
         
-        self.W_s = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)]) 
-        self.W_n = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
-        self.W_r = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
+        self.W_s = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number+1)])
+        self.W_n = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number+1)])
+        self.W_r = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number+1)])
         self.gate_linear = nn.Linear(embed_size, 1)
 
         # self.gcn_att = DenseGCNConv(embed_size, 1, bias=True)
@@ -161,7 +161,7 @@ class GraphEncoder(nn.Module):
 
             # new_xi = self.node_linear(new_xi)
             new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
-                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), 0)
+                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), self.hop_number)
             new_Xs.append(new_xi)
             new_concept_labels.append(concept_label)
             new_concept_ids.append(concept_id)
