@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.nn import Parameter, Linear
-from torch_geometric.nn.pool.topk_pool import topk, filter_adj
+from torch_geometric.nn.pool.topk_pool import topk
+from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_scatter import scatter_max, scatter_mean, scatter_add
 import torch.nn.functional as F
 
@@ -103,6 +104,24 @@ class GraphEncoder(nn.Module):
         # embedding_tensor: [4, 300, 768] new_adj: [4, 300, 300] S: [4, 300, 300]
         return embedding_tensor, new_adj
 
+    def filter_adj(self, edge_index, edge_attr, perm, triple_label, num_nodes=None):
+        num_nodes = maybe_num_nodes(edge_index, num_nodes)
+
+        mask = perm.new_full((num_nodes,), -1)
+        i = torch.arange(perm.size(0), dtype=torch.long, device=perm.device)
+        mask[perm] = i
+
+        row, col = edge_index
+        row, col = mask[row], mask[col]
+        mask = (row >= 0) & (col >= 0)
+        row, col = row[mask], col[mask]
+        triple_label = triple_label[mask]
+
+        if edge_attr is not None:
+            edge_attr = edge_attr[mask]
+
+        return torch.stack([row, col], dim=0), edge_attr, triple_label
+
     def sag_pooling(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, concept_labels, concept_ids):
         bsz = head.size(0)  # batch_size 4
         # mem_t = head.size(1)  # max_triple_len 600
@@ -122,6 +141,13 @@ class GraphEncoder(nn.Module):
             label = edge_index.new_zeros(xi.size(0))
 
             perm = topk(score, self.assign_ratio, label)
+            edge_index, new_relation, new_triple_label = self.filter_adj(edge_index, relation[i, :], perm,
+                                                                         triple_label[i], num_nodes=score.size(0))
+            new_head = edge_index[0, :]
+            new_tail = edge_index[1, :]
+            new_relation_hidden = relation_hidden[i][new_relation]
+            assert new_head.shape == new_tail.shape == new_relation.shape == new_triple_label.shape
+            assert new_head.shape[0] == new_relation_hidden.shape[0]
             # score contains lots of negative values, so relu zero out most of them
             # score = torch.sigmoid(torch.pow(score[perm], 2)) + 0.0000001
             score = torch.tanh(score[perm])
@@ -134,11 +160,13 @@ class GraphEncoder(nn.Module):
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
 
             # new_xi = self.node_linear(new_xi)
-            new_Xs.append(_xi)
+            new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
+                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), 0)
+            new_Xs.append(new_xi)
             new_concept_labels.append(concept_label)
             new_concept_ids.append(concept_id)
 
-        node_repr = torch.stack(new_Xs, dim=0).to(x.device)
+        node_repr = torch.cat(new_Xs, dim=0).to(x.device)
         concept_labels = torch.stack(new_concept_labels, dim=0).to(x.device)
         concept_ids = torch.stack(new_concept_ids, dim=0).to(x.device)
         return node_repr, concept_labels, concept_ids
