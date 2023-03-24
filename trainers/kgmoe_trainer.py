@@ -111,9 +111,13 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # do the expert training!
         model.train()
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
-        loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
 
-        # assert torch.isnan(loss).item() == False
+        if opt_loss.item() == 0:
+            loss = lm_loss + self.kg_loss_ratio * kg_loss
+        else:
+            loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
+
+        assert torch.isnan(loss).item() == False
 
         # if opt_loss == 0:
         #     print("opt_loss is zero!! ")
