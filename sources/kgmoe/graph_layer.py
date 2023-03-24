@@ -141,13 +141,13 @@ class GraphEncoder(nn.Module):
             label = edge_index.new_zeros(xi.size(0))
 
             perm = topk(score, self.assign_ratio, label)
-            # edge_index, new_relation, new_triple_label = self.filter_adj(edge_index, relation[i, :], perm,
-            #                                                              triple_label[i], num_nodes=score.size(0))
-            # new_head = edge_index[0, :]
-            # new_tail = edge_index[1, :]
-            # new_relation_hidden = relation_hidden[i][new_relation]
-            # assert new_head.shape == new_tail.shape == new_relation.shape == new_triple_label.shape
-            # assert new_head.shape[0] == new_relation_hidden.shape[0]
+            edge_index, new_relation, new_triple_label = self.filter_adj(edge_index, relation[i, :], perm,
+                                                                         triple_label[i], num_nodes=score.size(0))
+            new_head = edge_index[0, :]
+            new_tail = edge_index[1, :]
+            new_relation_hidden = relation_hidden[i][new_relation]
+            assert new_head.shape == new_tail.shape == new_relation.shape == new_triple_label.shape
+            assert new_head.shape[0] == new_relation_hidden.shape[0]
             # score contains lots of negative values, so relu zero out most of them
             # score = torch.sigmoid(torch.pow(score[perm], 2)) + 0.0000001
             score = torch.tanh(score[perm])
@@ -159,10 +159,10 @@ class GraphEncoder(nn.Module):
             # new_xi[perm] = _xi
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
 
-            # new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
-            #                        new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), self.hop_number)
-            # new_Xs.append(new_xi)
-            new_Xs.append(_xi)
+            new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
+                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), self.hop_number)
+            new_Xs.append(new_xi.squeeze(0))
+            # new_Xs.append(_xi)
             new_concept_labels.append(concept_label)
             new_concept_ids.append(concept_id)
 
@@ -306,12 +306,13 @@ class GraphEncoder(nn.Module):
             relation_hidden = rel_repr
             concept_hidden_list = [memory]
             # _concept_hidden = memory
-            for i in range(self.hop_number):
-                concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
-                # _concept_hidden = _concept_hidden + concept_hidden
-                concept_hidden_list.append(concept_hidden)
-            node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
-            node_repr = self.node_linear(node_repr)
+            # for i in range(self.hop_number):
+            #     concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, i)
+            #     # _concept_hidden = _concept_hidden + concept_hidden
+            #     concept_hidden_list.append(concept_hidden)
+            # node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
+            # node_repr = self.node_linear(node_repr)
+            node_repr, rel_repr = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, 0)
             pooled_node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
                                                                       triple_label, concept_labels, concept_ids)
             ###################################### end of sag_pooling ######################################
