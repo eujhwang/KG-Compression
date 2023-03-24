@@ -160,7 +160,7 @@ class GraphEncoder(nn.Module):
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
 
             new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
-                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), self.hop_number)
+                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), 1)
             new_Xs.append(new_xi.squeeze(0))
             # new_Xs.append(_xi)
             new_concept_labels.append(concept_label)
