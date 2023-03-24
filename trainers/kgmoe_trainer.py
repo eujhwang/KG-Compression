@@ -221,8 +221,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # else:
         #     final_loss = 0.0
         # assert final_loss != 0
-        final_loss = total_loss/len(opt_losses)
-        return final_loss
+        # final_loss = total_loss/len(opt_losses)
+        return total_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix
         # row_ind = M.sum(-1).nonzero().squeeze() #nonzero has bugs in Pytorch 1.2.0.........
