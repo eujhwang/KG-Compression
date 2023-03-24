@@ -113,7 +113,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
         loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
 
-        assert torch.isnan(loss).item() == False
+        # assert torch.isnan(loss).item() == False
 
         # if opt_loss == 0:
         #     print("opt_loss is zero!! ")
@@ -199,6 +199,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
     def _compute_opt_loss(self, node_output, node_hidden, device):
         opt_losses = []
+        total_loss = 0
         epsilon = 1.0
         opt_epochs = 10
         # node_hidden: [16, 210, 768], node_output: [16, 300, 768]
@@ -213,13 +214,14 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
                 print("opt loss is 0!!\n>>> mem:", mem.shape, mem)
                 print(">>> new_mem:", new_mem.shape, new_mem)
                 assert False
-
+            total_loss += loss
             opt_losses.append(loss.item())
-        if len(opt_losses) > 0:
-            final_loss = sum(opt_losses) / len(opt_losses)
-        else:
-            final_loss = 0.0
-        assert final_loss != 0
+        # if len(opt_losses) > 0:
+        #     final_loss = sum(opt_losses) / len(opt_losses)
+        # else:
+        #     final_loss = 0.0
+        # assert final_loss != 0
+        final_loss = total_loss/len(opt_losses)
         return final_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix

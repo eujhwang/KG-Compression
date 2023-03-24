@@ -28,9 +28,9 @@ class GraphEncoder(nn.Module):
         print("assign_ratio:", self.assign_ratio, "num_mixtures:", self.num_mixtures, "pool_type:", self.pool_type)
         # self.triple_linear = nn.Linear(embed_size * 3, embed_size, bias=False)
         
-        self.W_s = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number+1)])
-        self.W_n = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number+1)])
-        self.W_r = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number+1)])
+        self.W_s = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
+        self.W_n = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
+        self.W_r = nn.ModuleList([nn.Linear(embed_size, embed_size, bias=False) for _ in range(self.hop_number)])
         self.gate_linear = nn.Linear(embed_size, 1)
 
         # self.gcn_att = DenseGCNConv(embed_size, 1, bias=True)
@@ -141,13 +141,13 @@ class GraphEncoder(nn.Module):
             label = edge_index.new_zeros(xi.size(0))
 
             perm = topk(score, self.assign_ratio, label)
-            edge_index, new_relation, new_triple_label = self.filter_adj(edge_index, relation[i, :], perm,
-                                                                         triple_label[i], num_nodes=score.size(0))
-            new_head = edge_index[0, :]
-            new_tail = edge_index[1, :]
-            new_relation_hidden = relation_hidden[i][new_relation]
-            assert new_head.shape == new_tail.shape == new_relation.shape == new_triple_label.shape
-            assert new_head.shape[0] == new_relation_hidden.shape[0]
+            # edge_index, new_relation, new_triple_label = self.filter_adj(edge_index, relation[i, :], perm,
+            #                                                              triple_label[i], num_nodes=score.size(0))
+            # new_head = edge_index[0, :]
+            # new_tail = edge_index[1, :]
+            # new_relation_hidden = relation_hidden[i][new_relation]
+            # assert new_head.shape == new_tail.shape == new_relation.shape == new_triple_label.shape
+            # assert new_head.shape[0] == new_relation_hidden.shape[0]
             # score contains lots of negative values, so relu zero out most of them
             # score = torch.sigmoid(torch.pow(score[perm], 2)) + 0.0000001
             score = torch.tanh(score[perm])
@@ -159,14 +159,14 @@ class GraphEncoder(nn.Module):
             # new_xi[perm] = _xi
             # edge_index, edge_attr = filter_adj(edge_index, relation_hidden[i], perm, num_nodes=score.size(0))
 
-            # new_xi = self.node_linear(new_xi)
-            new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
-                                   new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), self.hop_number)
-            new_Xs.append(new_xi)
+            # new_xi, _ = self.comp_gcn(_xi.unsqueeze(0), new_relation_hidden.unsqueeze(0), new_head.unsqueeze(0),
+            #                        new_tail.unsqueeze(0), new_triple_label.unsqueeze(0), self.hop_number)
+            # new_Xs.append(new_xi)
+            new_Xs.append(_xi)
             new_concept_labels.append(concept_label)
             new_concept_ids.append(concept_id)
 
-        node_repr = torch.cat(new_Xs, dim=0).to(x.device)
+        node_repr = torch.stack(new_Xs, dim=0).to(x.device)
         concept_labels = torch.stack(new_concept_labels, dim=0).to(x.device)
         concept_ids = torch.stack(new_concept_ids, dim=0).to(x.device)
         return node_repr, concept_labels, concept_ids
@@ -386,7 +386,7 @@ class GraphEncoder(nn.Module):
         ###################################### end of original ######################################
 
         # concept_ids is needed for generating step.
-        return pooled_node_repr.to(memory.device), node_repr, concept_labels, concept_ids
+        return pooled_node_repr.to(memory.device), memory, concept_labels, concept_ids
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 
