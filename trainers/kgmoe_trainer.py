@@ -1,6 +1,8 @@
 import warnings
 import logging
 from typing import Any, Dict, Optional, Tuple, Union
+
+from geomloss import SamplesLoss
 from tqdm.auto import tqdm
 
 import torch
@@ -207,19 +209,24 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         epsilon = 1.0
         opt_epochs = 10
         # node_hidden: [16, 210, 768], node_output: [16, 300, 768]
-        for i in range(len(node_output)):
-            mem = self.get_nonzero_rows(node_output[i])
-            new_mem = self.get_nonzero_rows(node_hidden[i])
-            if mem.shape[0] == 0: continue
-            if new_mem.shape[0] == 0: continue
-            loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
-
-            if loss.item() == 0:
-                print("opt loss is 0!!\n>>> mem:", mem.shape, mem)
-                print(">>> new_mem:", new_mem.shape, new_mem)
-                assert False
-            total_loss += loss
-            opt_losses.append(loss.item())
+        Loss = SamplesLoss("sinkhorn", p=2, blur=0.05, scaling=0.8)
+        Wass_xy = Loss(node_output, node_hidden)
+        print("Wass_xy:", torch.mean(Wass_xy), Wass_xy)
+        total_loss = torch.mean(Wass_xy)
+        # assert False
+        # for i in range(len(node_output)):
+        #     mem = self.get_nonzero_rows(node_output[i])
+        #     new_mem = self.get_nonzero_rows(node_hidden[i])
+        #     if mem.shape[0] == 0: continue
+        #     if new_mem.shape[0] == 0: continue
+        #     loss = sinkhorn_loss_default(mem, new_mem, epsilon, niter=opt_epochs, device=device).float()
+        #
+        #     if loss.item() == 0:
+        #         print("opt loss is 0!!\n>>> mem:", mem.shape, mem)
+        #         print(">>> new_mem:", new_mem.shape, new_mem)
+        #         assert False
+        #     total_loss += loss
+        #     opt_losses.append(loss.item())
         # if len(opt_losses) > 0:
         #     final_loss = sum(opt_losses) / len(opt_losses)
         # else:
