@@ -112,7 +112,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         model.train()
         lm_loss, kg_loss, opt_loss = self.compute_loss(model, inputs)
 
-        if opt_loss.item() == 0:
+        if opt_loss == 0:
             loss = lm_loss + self.kg_loss_ratio * kg_loss
         else:
             loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * opt_loss
