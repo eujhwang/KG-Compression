@@ -211,7 +211,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # node_hidden: [16, 210, 768], node_output: [16, 300, 768]
         Loss = SamplesLoss("sinkhorn", p=2, blur=0.05, scaling=0.8)
         Wass_xy = Loss(node_output, node_hidden)
-        print("Wass_xy:", torch.mean(Wass_xy), Wass_xy)
+        # print("Wass_xy:", torch.mean(Wass_xy), Wass_xy)
         total_loss = torch.mean(Wass_xy)
         # assert False
         # for i in range(len(node_output)):
