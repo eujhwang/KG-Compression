@@ -226,6 +226,8 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         #     final_loss = 0.0
         # assert final_loss != 0
         # final_loss = total_loss/len(opt_losses)
+        if total_loss == 0:
+            print("total opt loss is zero")
         return total_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix
