@@ -149,7 +149,10 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        opt_loss = self._compute_opt_loss(pooled_kg_outputs, original_kg_outputs, model.device)
+        if original_kg_outputs is not None:
+            opt_loss = self._compute_opt_loss(pooled_kg_outputs, original_kg_outputs, model.device)
+        else:
+            opt_loss = 0
         del lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels
         return lm_loss, kg_loss, opt_loss
 

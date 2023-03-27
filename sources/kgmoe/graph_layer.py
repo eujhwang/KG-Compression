@@ -317,18 +317,9 @@ class GraphEncoder(nn.Module):
                                                                       triple_label, concept_labels, concept_ids)
             ###################################### end of sag_pooling ######################################
         else:
-            concept_hidden = memory
-            relation_hidden = rel_repr
-            concept_hidden_list = [memory]
-            # _concept_hidden = memory
-            for i in range(self.hop_number):
-                concept_hidden, relation_hidden = self.comp_gcn(concept_hidden, relation_hidden, head, tail,
-                                                                triple_label, i)
-                # _concept_hidden = _concept_hidden + concept_hidden
-                concept_hidden_list.append(concept_hidden)
-            node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
-            node_repr = self.node_linear(node_repr)
-            pooled_node_repr = None
+            node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
+            pooled_node_repr = node_repr
+            memory = None
 
         ###################################### start of co_pooling ######################################
         # concept_hidden = memory
@@ -387,7 +378,7 @@ class GraphEncoder(nn.Module):
         ###################################### end of original ######################################
 
         # concept_ids is needed for generating step.
-        return pooled_node_repr.to(memory.device), memory, concept_labels, concept_ids
+        return pooled_node_repr.to(concept_ids.device), memory, concept_labels, concept_ids
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 
