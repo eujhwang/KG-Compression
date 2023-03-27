@@ -449,10 +449,6 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
                 one_hop_ids = random.sample(one_hop_ids, max_one_hop_concept_num)
 
             topk_head_ids = zero_hop_ids.tolist() + list(one_hop_ids)
-            # print("zero_hop_ids:", len(zero_hop_ids), zero_hop_ids)
-            # print("one_hop_ids:", len(one_hop_ids), one_hop_ids)
-            # print("hop_ids:", len(hop_ids), hop_ids)
-            # assert False
             # if len(one_hop_index) > max_one_hop_concept_num:
             #     one_hop_index = random.sample(one_hop_index, max_one_hop_concept_num)
             #     one_hop_concepts = np_concepts[one_hop_index].tolist()
@@ -480,8 +476,11 @@ def aggregate_concepts(args, kgs, concepts_nv, model, sampler, data_loader, text
                     # obtain new tail event using comet inference
                     output_event = comet_inference(model, sampler, data_loader, text_encoder, concepts[head_id], rname, device)
 
-                    if len(output_event.split(" ")) > 1:
-                        continue
+                    event_split_dict = dict(Counter(output_event.split()))
+                    if len(event_split_dict) == 1:
+                        key = list(event_split_dict.keys())[0]
+                        if event_split_dict[key] > 1:
+                            continue
 
                     if output_event not in concepts and output_event not in new_concepts:
                         new_tail_id = len(concepts) + len(new_concepts)
