@@ -25,3 +25,6 @@ comet/model/
 comet/pretrained_models
 comet/data/
 *.pyc
+
+output-anlg/
+output-eg/
