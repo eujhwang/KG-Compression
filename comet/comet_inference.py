@@ -526,7 +526,7 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv, type):
 
     print("len(all_concept_nv_dict.keys()):", len(all_concept_nv_dict.keys()))
     _data, _concepts = [], []
-    max_num_tokens = 1
+    max_num_tokens = 3
     for kg, nv in tqdm.tqdm(zip(kgs, concepts_nv), total=len(kgs)):
         qc = tuple(nv['qc'])
 
