@@ -145,12 +145,12 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # labels=target_ids, concept_labels (if label in source subgraph is one of target concpets)
         lm_labels = inputs.pop("labels")
         # kg_labels = inputs.pop("concept_labels")
-        lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels = model(**inputs, use_cache=False)
+        lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels = model(**inputs, use_cache=False)
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
-        opt_loss = self._compute_opt_loss(kg_hidden, kg_outputs, model.device)
-        del lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels
+        opt_loss = self._compute_opt_loss(pooled_kg_outputs, original_kg_outputs, model.device)
+        del lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels
         return lm_loss, kg_loss, opt_loss
 
     def compute_mixture_ids(self, model, inputs):
@@ -203,17 +203,15 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
 
         return node_loss
 
-    def _compute_opt_loss(self, node_output, node_hidden, device):
+    def _compute_opt_loss(self, pooled_kg_outputs, original_kg_outputs, device):
         opt_losses = []
         total_loss = 0
         epsilon = 1.0
         opt_epochs = 10
         # node_hidden: [16, 210, 768], node_output: [16, 300, 768]
         Loss = SamplesLoss("sinkhorn", p=2, blur=0.05, scaling=0.8)
-        Wass_xy = Loss(node_output, node_hidden)
-        # print("Wass_xy:", torch.mean(Wass_xy), Wass_xy)
+        Wass_xy = Loss(pooled_kg_outputs, original_kg_outputs)
         total_loss = torch.mean(Wass_xy)
-        # assert False
         # for i in range(len(node_output)):
         #     mem = self.get_nonzero_rows(node_output[i])
         #     new_mem = self.get_nonzero_rows(node_hidden[i])
