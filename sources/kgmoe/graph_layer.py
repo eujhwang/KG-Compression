@@ -128,7 +128,7 @@ class GraphEncoder(nn.Module):
     def sag_pooling(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, concept_labels,
                     concept_ids):
         bsz_mix, num_concepts, hid_dim = concept_hidden.shape
-        bsz_mix, num_concepts, num_max_tokens = concept_ids.shape
+        bsz_mix, num_concepts = concept_ids.shape
         bsz_mix, num_max_triples = head.shape
 
         if bsz_mix == self.batch_size * self.num_mixtures:
@@ -136,7 +136,7 @@ class GraphEncoder(nn.Module):
         else:
             num_mixtures = 1
         concept_hidden = concept_hidden.view(-1, num_mixtures, num_concepts, hid_dim)
-        concept_ids = concept_ids.view(-1, num_mixtures, num_concepts, num_max_tokens)
+        concept_ids = concept_ids.view(-1, num_mixtures, num_concepts)
         concept_labels = concept_labels.view(-1, num_mixtures, num_concepts)
 
         head = head.view(-1, num_mixtures, num_max_triples)
@@ -148,7 +148,7 @@ class GraphEncoder(nn.Module):
         node_repr_list, concept_labels_list, concept_ids_list = [], [], []
         for mix in range(num_mixtures):
             _concept_hidden = concept_hidden[..., mix, :, :]
-            _concept_ids = concept_ids[..., mix, :, :]
+            _concept_ids = concept_ids[..., mix, :]
             _concept_labels = concept_labels[..., mix, :]
 
             _head = head[..., mix, :]
@@ -193,7 +193,7 @@ class GraphEncoder(nn.Module):
         # reshape tensors
         node_repr = node_repr.view(-1, node_repr.shape[-2], node_repr.shape[-1])
         concept_labels = concept_labels.view(-1, concept_labels.shape[-1])
-        concept_ids = concept_ids.view(-1, concept_ids.shape[-2], concept_ids.shape[-1])
+        concept_ids = concept_ids.view(-1, concept_ids.shape[-1])
 
         return node_repr, concept_labels, concept_ids
 
