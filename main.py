@@ -216,10 +216,12 @@ def main():
         config.mixture_embedding = data_args.mixture_embedding
         config.assign_ratio = data_args.assign_ratio
         config.pool_type = data_args.pool_type
+        config.batch_size = training_args.per_device_train_batch_size
+        assert training_args.per_device_train_batch_size == training_args.per_device_eval_batch_size
 
     ## load KG file
     if data_args.augment:
-        kg_vocab = Path(data_args.data_dir).joinpath("augmented.kg_vocab.txt")
+        kg_vocab = Path(data_args.data_dir).joinpath("augmented-v1.kg_vocab.txt")
         concept2id, tokenizer_len = load_kg_vocab(kg_vocab, tokenizer)
     else:
         kg_vocab = Path(data_args.data_dir).joinpath("kg_vocab.txt")
@@ -231,7 +233,7 @@ def main():
         config=config,
         cache_dir=model_args.cache_dir,
     )
-    model.resize_token_embeddings(tokenizer_len)
+    # model.resize_token_embeddings(tokenizer_len)
 
     if data_args.use_wandb:
         wandb.watch(model)

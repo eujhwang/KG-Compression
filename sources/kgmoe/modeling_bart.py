@@ -66,7 +66,7 @@ class BartMoEModel(PretrainedBartModel):
         self.encoder.mixture_embeddings = self.mixture_embeddings
 
         self.gnn = GraphEncoder(config.d_model, pool_type=config.pool_type, gamma=0.8, alpha=1, beta=1, aggregate_method="max", tokenizer=None,
-                                hop_number=2, num_mixtures=config.mixtures, assign_ratio=config.assign_ratio)
+                                hop_number=2, num_mixtures=config.mixtures, assign_ratio=config.assign_ratio, batch_size=config.batch_size)
         self.gnn.embed_word = self.shared
         self.gnn.mixture_embed = self.mixture_embeddings
 

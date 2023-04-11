@@ -133,7 +133,7 @@ class AbstractSeq2SeqDataset(Dataset):
         if self.augment:
             # self.kg_vocab = Path(data_dir).joinpath("augmented.kg_vocab.txt")
             # self.concept2id = load_kg_vocab(self.kg_vocab, tokenizer)
-            self.kg_path = Path(data_dir).joinpath("augmented." + type_path + ".kg.json")
+            self.kg_path = Path(data_dir).joinpath("augmented-v1." + type_path + ".kg.json")
         else:
             # self.kg_vocab = Path(data_dir).joinpath("kg_vocab.txt")
             # self.concept2id = load_kg_vocab(self.kg_vocab, tokenizer)
