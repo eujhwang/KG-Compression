@@ -86,8 +86,8 @@ def load_kg_vocab(path, tokenizer):
             tokenized_vocab = tokenizer.encode(' '+vocab, add_special_tokens=False)
             if len(tokenized_vocab) > 1:
                 print('not covered vocab: ', vocab, tokenized_vocab)
-                tokenizer.add_tokens(' '+vocab)
-                tokenized_vocab = tokenizer.encode(' '+vocab, add_special_tokens=False)
+                # tokenizer.add_tokens(' '+vocab)
+                # tokenized_vocab = tokenizer.encode(' '+vocab, add_special_tokens=False)
             elif concept2id.get(vocab):
                 print('duplicated vocab: ', vocab, tokenized_vocab)
             concept2id[vocab] = tokenized_vocab[0]
