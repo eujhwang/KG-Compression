@@ -365,6 +365,10 @@ class Seq2SeqTrainer(Trainer):
                 # ''' save the model '''
                 if metrics[self.args.metric_for_best_model] > self.best_metric:
                     self.best_metric = metrics[self.args.metric_for_best_model]
+                    wandb.log({
+                        f"Best {self.args.metric_for_best_model}": self.best_metric,
+                        "Best epoch": epoch + 1,
+                    })
                     self._save_training(model, trial, metrics=metrics)
                     logging.info("[Best-Eval] best metrics: %s" % (self.best_metric))
             if self.args.max_steps > 0 and self.global_step >= self.args.max_steps:
