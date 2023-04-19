@@ -526,11 +526,16 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv, type):
 
     print("len(all_concept_nv_dict.keys()):", len(all_concept_nv_dict.keys()))
     _data, _concepts = [], []
-    max_num_tokens = 3
+    max_num_tokens = 1
     for kg, nv in tqdm.tqdm(zip(kgs, concepts_nv), total=len(kgs)):
+        original_concepts = kg['concepts']
+        num_concept = len(kg['concepts'])
         qc = tuple(nv['qc'])
 
         if qc in all_concept_nv_dict.keys():
+            # original_head_ids = kg['head_ids']
+            # original_tail_ids = kg['tail_ids']
+            # original_max_id = max(max(original_head_ids), max(original_tail_ids))
 
             concepts = all_concept_nv_dict[qc]['concepts']
             labels = all_concept_nv_dict[qc]['labels']
@@ -550,31 +555,37 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv, type):
             new_triple_labels = []
             new_relations = []
             invalid_concept_index = []
+            invalid_concepts = []
             for i in range(len(concepts)):
                 concept = concepts[i]
                 label = labels[i]
                 dist = distances[i]
-                # head_id = _head_ids[i]
-                # tail_id = _tail_ids[i]
-                # triple_label = _triple_labels[i]
-                # relation = _relations[i]
+
                 if len(concept.split(" ")) > max_num_tokens:
-                    print("concept:", concept)
                     invalid_concept_index.append(i)
-                else:
-                    new_concepts.append(concept)
-                    new_labels.append(label)
-                    new_distances.append(dist)
-                    # new_head_ids.append(head_id)
-                    # new_tail_ids.append(tail_id)
-                    # new_triple_labels.append(triple_label)
-                    # new_relations.append(relation)
-            print("invalid_concept_index:", invalid_concept_index)
-            for head_id, tail_id, relation, triple_label in zip(head_ids, tail_ids, relations, triple_labels):
-                if head_id in invalid_concept_index or tail_id in invalid_concept_index:
+                    invalid_concepts.append(concept)
                     continue
-                new_head_ids.append(head_id)
-                new_tail_ids.append(tail_id)
+
+                new_concepts.append(concept)
+                new_labels.append(label)
+                new_distances.append(dist)
+
+            unfiltered_concepts = original_concepts + concepts
+            filtered_concepts = original_concepts + new_concepts
+            # print("unfiltered_concepts:", len(unfiltered_concepts), unfiltered_concepts)
+            # print("filtered_concepts:", len(filtered_concepts), filtered_concepts)
+
+            for head_id, tail_id, relation, triple_label in zip(head_ids, tail_ids, relations, triple_labels):
+                # print(head_id, concepts[head_id], tail_id, concepts[tail_id], relation, triple_label)
+                head_concept = unfiltered_concepts[head_id]
+                tail_concept = unfiltered_concepts[tail_id]
+                if head_concept in invalid_concepts or tail_concept in invalid_concepts:
+                    continue
+                new_head_id = filtered_concepts.index(head_concept)
+                new_tail_id = filtered_concepts.index(tail_concept)
+
+                new_head_ids.append(new_head_id)
+                new_tail_ids.append(new_tail_id)
                 new_relations.append(relation)
                 new_triple_labels.append(triple_label)
 
@@ -602,18 +613,9 @@ def merge_concept_nv_dict(dir, kgs, concepts_nv, type):
                 'relations': relations,
                 'triple_labels': triple_labels,
             })
-
-            # print("new concepts:", len(concepts), type(concepts), concepts)
-            # print("new labels:", len(labels), type(labels), labels)
-            # print("new distances:", len(distances), type(distances), distances)
-            # print("new head_ids:", len(head_ids), type(head_ids), head_ids)
-            # print("new relations:", len(tail_ids), type(tail_ids), tail_ids)
-            # print("new tail_ids:", len(relations), type(relations), relations)
-            # print("new triple_labels:", len(triple_labels), type(triple_labels), triple_labels)
-            # assert False
+            # print("new_kg:", _data[-1])
         else:
-            print("qc:", qc)
-            _concepts += concepts
+            _concepts += original_concepts
             _data.append(kg)
 
     return _data, _concepts
