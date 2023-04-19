@@ -233,7 +233,7 @@ def main():
         config=config,
         cache_dir=model_args.cache_dir,
     )
-    # model.resize_token_embeddings(tokenizer_len)
+    model.resize_token_embeddings(tokenizer_len)
 
     if data_args.use_wandb:
         wandb.watch(model)
