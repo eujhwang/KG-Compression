@@ -177,107 +177,40 @@ def main(args):
         sent = item['sent']
         ans = item['ans']
         ans = ans.split('\t')
-        # print("sent:", sent, "ans:", ans)
         sentences.append({
             "sent": sent,
             "ans": ans
         })
         target_pred_list.extend(ans)
 
-    # sag_dir = "output-eg/KGMixtureOfExpertCho_Output_akzotqmi_83ju8zz9"
-    # aug_dir = "output-eg/KGMixtureOfExpertCho_Output_7ts6r62l_l5vly7x7"
-    # sag_aug_dir = "output-eg/KGMixtureOfExpertCho_Output_2uinyfdo_im13vzt7"
-    # ori_dir = "../MoKGE-origin/output-eg/KGMixtureOfExpertCho_Output"
+    dirs = {
+        "dir": "output-eg/KGMixtureOfExpertCho_Output_l7prhw4v_ksjhdhvs",
+        "infer-dir": "output-eg-infer/KGMixtureOfExpertCho_Output_l7prhw4v_ksjhdhvs",
+    }
 
-    sag_dir = "output-eg-infer/sag/KGMixtureOfExpertCho_Output_akzotqmi_83ju8zz9"
-    aug_dir = "output-eg-infer/aug/KGMixtureOfExpertCho_Output_7ts6r62l_l5vly7x7"
-    sag_aug_dir = "output-eg-infer/sag-aug/KGMixtureOfExpertCho_Output_2uinyfdo_im13vzt7"
-    ori_dir = "output-eg-infer/origin/KGMixtureOfExpertCho_Output"
+    dir = dirs["dir"]
+    infer_dir = dirs["infer-dir"]
 
     token_file = "output_test_selected_tokens.txt"
     pred_file = "output_test_pred.txt"
 
-    sag_token_path = os.path.join(sag_dir, token_file)
-    aug_token_path = os.path.join(aug_dir, token_file)
-    sag_aug_token_path = os.path.join(sag_aug_dir, token_file)
-    ori_token_path = os.path.join(ori_dir, token_file)
+    token_path = os.path.join(infer_dir, token_file)
+    pred_path = os.path.join(dir, pred_file)
 
-    sag_pred_path = os.path.join(sag_dir, pred_file)
-    aug_pred_path = os.path.join(aug_dir, pred_file)
-    sag_aug_pred_path = os.path.join(sag_aug_dir, pred_file)
-    ori_pred_path = os.path.join(ori_dir, pred_file)
+    token_list = parse_tokens(token_path)
+    pred_list = parse_preds(pred_path)
 
-    sag_token_list = parse_tokens(sag_token_path)
-    aug_token_list = parse_tokens(aug_token_path)
-    sag_aug_token_list = parse_tokens(sag_aug_token_path)
-    ori_token_list = parse_tokens(ori_token_path)
+    assert len(target_pred_list) == len(pred_list)
 
-    sag_pred_list = parse_preds(sag_pred_path)
-    aug_pred_list = parse_preds(aug_pred_path)
-    sag_aug_pred_list = parse_preds(sag_aug_pred_path)
-    ori_pred_list = parse_preds(ori_pred_path)
+    synonym_num_list = count_synonyms(token_list)
+    print("avg-synonym-num:", sum(synonym_num_list) / len(synonym_num_list))
+    all_tokens, tokens_per_sent, synonym_num = count_all_distinct_token(token_list)
+    print("all_tokens:", all_tokens, "tokens_per_sent", tokens_per_sent, "synonym_num", synonym_num)
 
-    # assert len(sag_token_list) == len(aug_token_list) == len(sag_aug_token_list) == len(ori_token_list)
-    assert len(target_pred_list) == len(sag_pred_list) == len(aug_pred_list) == len(sag_aug_pred_list) == len(
-        ori_pred_list)
-
-    # model = SentenceTransformer('all-distilroberta-v1')
-    # model = model.to(device)
-    # bert_scorer = BERTScorer(lang="en", rescale_with_baseline=True)
-    bert_scorer = BERTScorer(model_type="facebook/bart-large")
-
-    # print("################################## sag_token_list ##################################")
-    # # calculate_scores(sag_token_list[:30], sentences, model)
-    #
-    # sag_synonym_num_list = count_synonyms(sag_token_list)
-    # aug_synonym_num_list = count_synonyms(aug_token_list)
-    # sag_aug_synonym_num_list = count_synonyms(sag_aug_token_list)
-    ori_synonym_num_list = count_synonyms(ori_token_list[:150])
-
-    # print("avg-sag-synonym-num:", sum(sag_synonym_num_list)/len(sag_synonym_num_list))
-    # print("avg-aug-synonym-num:", sum(aug_synonym_num_list)/len(aug_synonym_num_list))
-    # print("avg-sag_aug-synonym-num:", sum(sag_aug_synonym_num_list)/len(sag_aug_synonym_num_list))
-    print("avg-ori-synonym-num:", sum(ori_synonym_num_list)/len(ori_synonym_num_list))
-    #
-    # sag_all_tokens, sag_tokens_per_sent, sag_synonym_num = count_all_distinct_token(sag_token_list)
-    # aug_all_tokens, aug_tokens_per_sent, aug_synonym_num = count_all_distinct_token(aug_token_list)
-    # sag_aug_all_tokens, sag_aug_tokens_per_sent, sag_aug_synonym_num = count_all_distinct_token(sag_aug_token_list)
-    # ori_all_tokens, ori_tokens_per_sent, ori_synonym_num = count_all_distinct_token(ori_token_list)
-    #
-    # print("sag_all_tokens:", sag_all_tokens, "sag_tokens_per_sent", sag_tokens_per_sent, "sag_synonym_num", sag_synonym_num)
-    # print("aug_all_tokens:", aug_all_tokens, "aug_tokens_per_sent", aug_tokens_per_sent, "aug_synonym_num", aug_synonym_num)
-    # print("sag_aug_all_tokens:", sag_aug_all_tokens, "sag_aug_tokens_per_sent", sag_aug_tokens_per_sent, "sag_aug_synonym_num", sag_aug_synonym_num)
-    # print("ori_all_tokens:", ori_all_tokens, "ori_tokens_per_sent", ori_tokens_per_sent, "ori_synonym_num", ori_synonym_num)
-
-    # print("################################## aug_token_list ##################################")
-    # calculate_scores(aug_token_list[:30], sentences, model)
-    #
-    # print("################################## sag_aug_token_list ##################################")
-    # calculate_scores(sag_aug_token_list[:30], sentences, model)
-    #
-    # print("################################## ori_token_list ##################################")
-    # calculate_scores(ori_token_list[:30], sentences, model)
-
-    # P, R, F1 = bert_scorer.score(ori_pred_list, target_pred_list)
-    # print("P:", P.shape, P, "R:", R.shape, R, "F1:", F1.shape, F1)
-    # print("P:", torch.mean(P).item(), "R:", torch.mean(R).item(), "F1:", torch.mean(F1).item())
-    #
-    # P, R, F1 = bert_scorer.score(sag_pred_list, target_pred_list)
-    # print("P:", P.shape, P, "R:", R.shape, R, "F1:", F1.shape, F1)
-    # print("P:", torch.mean(P).item(), "R:", torch.mean(R).item(), "F1:", torch.mean(F1).item())
-    #
-    # P, R, F1 = bert_scorer.score(aug_pred_list, target_pred_list)
-    # print("P:", P.shape, P, "R:", R.shape, R, "F1:", F1.shape, F1)
-    # print("P:", torch.mean(P).item(), "R:", torch.mean(R).item(), "F1:", torch.mean(F1).item())
-    #
-    # P, R, F1 = bert_scorer.score(sag_aug_pred_list, target_pred_list)
-    # print("P:", P.shape, P, "R:", R.shape, R, "F1:", F1.shape, F1)
-    # print("P:", torch.mean(P).item(), "R:", torch.mean(R).item(), "F1:", torch.mean(F1).item())
-
-    # P: tensor(0.3483) R: tensor(0.4114) F1: tensor(0.3800)
-    # bert_score_p = torch.nn.functional.relu(P)
-    # bert_score_r = torch.nn.functional.relu(R)
-    # bert_score_f1 = torch.nn.functional.relu(F1)
+    bert_scorer = BERTScorer(model_type="microsoft/deberta-xlarge-mnli")
+    P, R, F1 = bert_scorer.score(pred_list, target_pred_list)
+    print("P:", P.shape, P, "R:", R.shape, R, "F1:", F1.shape, F1)
+    print("P:", torch.mean(P).item(), "R:", torch.mean(R).item(), "F1:", torch.mean(F1).item())
 
 
 if __name__ == '__main__':
