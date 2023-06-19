@@ -141,7 +141,7 @@ class BartMoEModel(PretrainedBartModel):
                 return_dict=return_dict,
             )
 
-            pooled_concept_outputs, original_concept_outputs, concept_labels, concept_ids = self.gnn(
+            pooled_concept_outputs, original_concept_outputs, concept_labels, concept_ids, perm_idx = self.gnn(
                 concept_ids=concept_ids, 
                 distance=concept_distances, 
                 head=head_ids, 
@@ -174,7 +174,7 @@ class BartMoEModel(PretrainedBartModel):
         )
 
         if not return_dict:
-            return decoder_outputs + encoder_outputs, pooled_concept_outputs, original_concept_outputs, concept_labels, concept_ids
+            return decoder_outputs + encoder_outputs, pooled_concept_outputs, original_concept_outputs, concept_labels, concept_ids, perm_idx
 
         output_dict = Seq2SeqModelOutput(
             last_hidden_state=decoder_outputs.last_hidden_state,
@@ -185,7 +185,7 @@ class BartMoEModel(PretrainedBartModel):
             encoder_hidden_states=encoder_outputs.hidden_states,
             encoder_attentions=encoder_outputs.attentions,
         )
-        return output_dict, None, None, None, None
+        return output_dict, None, None, None, None, None
 
     def get_input_embeddings(self):
         return self.shared
@@ -372,7 +372,7 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
                 decoder_input_ids = shift_tokens_right(lm_labels, self.config.pad_token_id)
 
         # decoder_outputs + encoder_outputs, concept_outputs
-        lm_outputs, pooled_concept_outputs, original_concept_outputs, kg_labels, concept_ids = self.model(
+        lm_outputs, pooled_concept_outputs, original_concept_outputs, kg_labels, concept_ids, perm_idx = self.model(
             input_ids,
             lm_mixture_ids=lm_mixture_ids,
             attention_mask=attention_mask,
@@ -407,9 +407,9 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
             lm_output = (lm_logits, lm_outputs[-1]) + lm_outputs[1: -1] # training only this output
             kg_logits = self._calculate_kg_logits(pooled_concept_outputs)
             if masked_lm_loss is not None:
-                return ((masked_lm_loss,) + lm_output), kg_logits, pooled_concept_outputs, original_concept_outputs, kg_labels
+                return ((masked_lm_loss,) + lm_output), kg_logits, pooled_concept_outputs, original_concept_outputs, kg_labels, perm_idx
             else:
-                return lm_output, kg_logits, pooled_concept_outputs, original_concept_outputs, kg_labels
+                return lm_output, kg_logits, pooled_concept_outputs, original_concept_outputs, kg_labels, perm_idx
 
         return Seq2SeqLMOutput(
             loss=masked_lm_loss,
@@ -656,7 +656,7 @@ class BartKGMoEForConditionalGeneration(PretrainedBartModel):
             mixture_tmp = torch.arange(num_beams, dtype=torch.long, device=input_ids.device).view(
                     num_beams, 1).repeat(_batch_size, 1)
             kg_mixture_ids = mixture_tmp.expand(concept_ids.shape)
-            pooled_concept_outputs, original_concept_outputs, concept_labels, concept_ids = graph_encoder(concept_ids, distance=concept_distances,
+            pooled_concept_outputs, original_concept_outputs, concept_labels, concept_ids, perm_idx = graph_encoder(concept_ids, distance=concept_distances,
                 head=head_ids, tail=tail_ids, relation=relation_ids, 
                 triple_label=triple_labels, mixture_ids=kg_mixture_ids, concept_labels=concept_labels)
 

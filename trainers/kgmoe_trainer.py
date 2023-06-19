@@ -145,12 +145,12 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # labels=target_ids, concept_labels (if label in source subgraph is one of target concpets)
         lm_labels = inputs.pop("labels")
         # kg_labels = inputs.pop("concept_labels")
-        lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels = model(**inputs, use_cache=False)
+        lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels, perm_idx = model(**inputs, use_cache=False)
         lm_logits = lm_outputs[0]
         lm_loss = self._compute_loss(lm_logits, lm_labels)
         kg_loss = self._compute_kg_loss(kg_logits, kg_labels)
         if original_kg_outputs is not None:
-            opt_loss = self._compute_opt_loss(pooled_kg_outputs, original_kg_outputs, model.device)
+            wass_xy, opt_loss = self._compute_opt_loss(pooled_kg_outputs, original_kg_outputs, model.device)
         else:
             opt_loss = 0
         del lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels
@@ -162,13 +162,13 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         _lm_labels = _inputs.pop("labels")
         # _kg_labels = _inputs.pop("concept_labels")
         # _kg_labels = _inputs["concept_labels"]
-        lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels = model(**_inputs, use_cache=False)
+        lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels, perm_idx = model(**_inputs, use_cache=False)
         lm_logits = lm_outputs[0]
-        mixture_ids = self._compute_mixture_loss(lm_logits, kg_logits, _lm_labels, kg_labels)
-        del lm_outputs, kg_logits, kg_outputs, kg_hidden, kg_labels
+        mixture_ids = self._compute_mixture_loss(lm_logits, kg_logits, _lm_labels, kg_labels, pooled_kg_outputs, original_kg_outputs, perm_idx)
+        del lm_outputs, kg_logits, pooled_kg_outputs, original_kg_outputs, kg_labels
         return mixture_ids
 
-    def _compute_mixture_loss(self, lm_logits, kg_logits, lm_labels, kg_labels):
+    def _compute_mixture_loss(self, lm_logits, kg_logits, lm_labels, kg_labels, pooled_kg_outputs, original_kg_outputs, perm_idx):
         # lm_logits & lm_labels: [180, 27] (decoder_dim), kg_logits & kg_labels: [180, 300]
         assert lm_logits.shape[:2] == lm_labels.shape
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=self.config.pad_token_id, reduction='none')
@@ -176,11 +176,27 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         lm_loss = loss_fct(lm_logits.view(-1, lm_logits.shape[-1]), lm_labels.view(-1)).reshape(self.B, self.mixtures,
                                                                                                 self.L)
         lm_loss = lm_loss.masked_fill(self.pad_mask, 0).sum(dim=2)
+        kg_loss = self._compute_kg_loss(kg_logits, kg_labels, reduction='none').view(self.BC, self.mixtures, -1)
 
-        # kg_loss = self._compute_kg_loss(kg_logits, kg_labels, reduction='none').view(self.BC, self.mixtures, self.LC)
+        concept_pad_mask = self.concept_pad_mask.squeeze(dim=1)
+        new_mask = []
+        for mixture in range(self.mixtures):
+            _perm_idx = perm_idx[:, mixture, :]
+            _concept_pad_mask = []
+            for i in range(_perm_idx.shape[0]):
+                _concept_pad_mask.append(concept_pad_mask[i, _perm_idx[i]])
+            _concept_pad_mask = torch.stack(_concept_pad_mask, dim=0)
+            new_mask.append(_concept_pad_mask)
+
+        new_concept_pad_mask = torch.stack(new_mask, dim=1)
+        kg_loss = kg_loss.masked_fill(new_concept_pad_mask, 0).sum(dim=2)
         # kg_loss = kg_loss.masked_fill(self.concept_pad_mask, 0).sum(dim=2)
 
-        mixture_ids = lm_loss.argmin(dim=1).unsqueeze(dim=1).type(torch.int64)
+        wass_xy, opt_loss = self._compute_opt_loss(pooled_kg_outputs, original_kg_outputs, lm_logits.device)
+        wass_xy = wass_xy.view(self.BC, self.mixtures)
+
+        loss = lm_loss + self.kg_loss_ratio * kg_loss + self.opt_loss_ratio * wass_xy
+        mixture_ids = loss.argmin(dim=1).unsqueeze(dim=1).type(torch.int64)
 
         return mixture_ids
 
@@ -214,6 +230,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # node_hidden: [16, 210, 768], node_output: [16, 300, 768]
         Loss = SamplesLoss("sinkhorn", p=2, blur=0.05, scaling=0.8)
         Wass_xy = Loss(pooled_kg_outputs, original_kg_outputs)
+        # print("Wass_xy:", Wass_xy.shape)
         total_loss = torch.mean(Wass_xy)
         # for i in range(len(node_output)):
         #     mem = self.get_nonzero_rows(node_output[i])
@@ -236,7 +253,7 @@ class KGMoESeq2SeqTrainer(Seq2SeqTrainer):
         # final_loss = total_loss/len(opt_losses)
         if total_loss == 0:
             print("total opt loss is zero")
-        return total_loss
+        return Wass_xy, total_loss
 
     def get_nonzero_rows(self, M):  # M is a matrix
         # row_ind = M.sum(-1).nonzero().squeeze() #nonzero has bugs in Pytorch 1.2.0.........

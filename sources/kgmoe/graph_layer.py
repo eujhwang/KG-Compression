@@ -145,7 +145,7 @@ class GraphEncoder(nn.Module):
         triple_label = triple_label.view(-1, num_mixtures, num_max_triples)
         relation_hidden = relation_hidden.view(-1, num_mixtures, num_max_triples, hid_dim)
 
-        node_repr_list, concept_labels_list, concept_ids_list = [], [], []
+        node_repr_list, concept_labels_list, concept_ids_list, perm_list = [], [], [], []
         for mix in range(num_mixtures):
             _concept_hidden = concept_hidden[..., mix, :, :]
             _concept_ids = concept_ids[..., mix, :]
@@ -161,6 +161,7 @@ class GraphEncoder(nn.Module):
             new_Xs = []
             new_concept_labels = []
             new_concept_ids = []
+            new_perm = []
             for i in range(bsz):
                 xi = x[i]
                 edge_index = torch.stack([_head[i, :], _tail[i, :]], dim=1).T
@@ -171,7 +172,8 @@ class GraphEncoder(nn.Module):
                 perm = topk(score, self.assign_ratio, label)
                 score = torch.tanh(score[perm])
                 _xi = xi[perm] * score.view(-1, 1)
-
+                # print("perm: {}".format(perm.shape))
+                new_perm.append(perm)
                 new_concept_label = _concept_labels[i, perm]
                 new_concept_id = _concept_ids[i, perm]
 
@@ -181,21 +183,24 @@ class GraphEncoder(nn.Module):
             new_Xs = torch.stack(new_Xs, dim=0).to(x.device)
             new_concept_labels = torch.stack(new_concept_labels, dim=0).to(x.device)
             new_concept_ids = torch.stack(new_concept_ids, dim=0).to(x.device)
+            new_perm = torch.stack(new_perm, dim=0).to(x.device)
 
             node_repr_list.append(new_Xs)
             concept_labels_list.append(new_concept_labels)
             concept_ids_list.append(new_concept_ids)
+            perm_list.append(new_perm)
 
         node_repr = torch.stack(node_repr_list, dim=1).to(x.device)
         concept_labels = torch.stack(concept_labels_list, dim=1).to(x.device)
         concept_ids = torch.stack(concept_ids_list, dim=1).to(x.device)
+        perm_idx = torch.stack(perm_list, dim=1).to(x.device)
 
         # reshape tensors
         node_repr = node_repr.view(-1, node_repr.shape[-2], node_repr.shape[-1])
         concept_labels = concept_labels.view(-1, concept_labels.shape[-1])
         concept_ids = concept_ids.view(-1, concept_ids.shape[-1])
 
-        return node_repr, concept_labels, concept_ids
+        return node_repr, concept_labels, concept_ids, perm_idx
 
     def sagh_pooling(self, concept_hidden, relation_hidden, head, tail, relation, triple_label, concept_labels,
                      concept_ids):
@@ -461,22 +466,23 @@ class GraphEncoder(nn.Module):
             node_repr = torch.cat(concept_hidden_list, dim=-1).to(memory.device)  # [bsz, #concepts, 768 * num_hop]
             node_repr = self.node_linear(node_repr)
             # node_repr, rel_repr = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, 0)
-            pooled_node_repr, concept_labels, concept_ids = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
+            pooled_node_repr, concept_labels, concept_ids, perm_idx = self.sag_pooling(node_repr, rel_repr, head, tail, relation,
                                                                       triple_label, concept_labels, concept_ids)
             ###################################### end of sag_pooling ######################################
-        elif self.pool_type == "sag-h":
-            concept_hidden = memory
-            relation_hidden = rel_repr
-            node_repr, rel_repr = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, 0)
-            node_repr, concept_labels, concept_ids, head, tail, relation, relation_hidden, triple_label = \
-                self.sagh_pooling(node_repr, rel_repr, head, tail, relation, triple_label, concept_labels, concept_ids)
-            node_repr, rel_repr = self.comp_gcn(node_repr, relation_hidden, head, tail, triple_label, 1)
-            pooled_node_repr, concept_labels, concept_ids, head, tail, relation, relation_hidden, triple_label = \
-                self.sagh_pooling(node_repr, rel_repr, head, tail, relation, triple_label, concept_labels, concept_ids)
+        # elif self.pool_type == "sag-h":
+        #     concept_hidden = memory
+        #     relation_hidden = rel_repr
+        #     node_repr, rel_repr = self.comp_gcn(concept_hidden, relation_hidden, head, tail, triple_label, 0)
+        #     node_repr, concept_labels, concept_ids, head, tail, relation, relation_hidden, triple_label = \
+        #         self.sagh_pooling(node_repr, rel_repr, head, tail, relation, triple_label, concept_labels, concept_ids)
+        #     node_repr, rel_repr = self.comp_gcn(node_repr, relation_hidden, head, tail, triple_label, 1)
+        #     pooled_node_repr, concept_labels, concept_ids, head, tail, relation, relation_hidden, triple_label = \
+        #         self.sagh_pooling(node_repr, rel_repr, head, tail, relation, triple_label, concept_labels, concept_ids)
         else:
             node_repr, rel_repr = self.multi_layer_comp_gcn(memory, rel_repr, head, tail, triple_label, layer_number=self.hop_number)
             pooled_node_repr = node_repr
             memory = None
+            perm_idx = None
 
         ###################################### start of co_pooling ######################################
         # concept_hidden = memory
@@ -535,7 +541,7 @@ class GraphEncoder(nn.Module):
         ###################################### end of original ######################################
 
         # concept_ids is needed for generating step.
-        return pooled_node_repr.to(concept_ids.device), memory, concept_labels, concept_ids
+        return pooled_node_repr.to(concept_ids.device), memory, concept_labels, concept_ids, perm_idx
 
     def generate(self, src_input_ids, attention_mask, src_position_ids, 
                     concept_ids, concept_label, distance, 
