@@ -1,12 +1,11 @@
-## Diversifying Commonsense Reasoning Generation on Knowledge Graph
+## Knowledge Graph Compression Enhances Diverse Commonsense Generation
 
 ## Introduction
 
--- This is the pytorch implementation of our [ACL 2022](https://www.2022.aclweb.org/) paper "*Diversifying Content Generation for Commonsense Reasoning with Mixture of Knowledge Graph Experts*" [\[PDF\]](https://arxiv.org/abs/2203.07285). 
-In this paper, we propose MoKGE, a novel method that diversifies the generative commonsense reasoning by a mixture of expert (MoE) strategy on knowledge graphs (KG). 
-A set of knowledge experts seek diverse reasoning on KG to encourage various generation outputs.
+-- This is the pytorch implementation of our [EMNLP 2023](https://aclanthology.org/2023.emnlp-main.37.pdf) paper "*Knowledge Graph Compression Enhances Diverse Commonsense Generation*".
 
-<img src="logits/MoKGE.jpg" width="800" align=center> 
+Implementation is based on the pytorch implementation of ACL 2022 paper "[Diversifying Content Generation for Commonsense Reasoning with Mixture of Knowledge Graph Experts](https://arxiv.org/abs/2203.07285)"
+
 
 ## Create an environment
 
@@ -22,9 +21,6 @@ psutil==5.9.0
 
 -- For `torch-scatter`, `${CUDA}` should be replaced by either `cu101` `cu102` `cu110` or `cu111` depending on your PyTorch installation. For more information check [here](https://github.com/rusty1s/pytorch_scatter).
 
--- A docker environment could be downloaded from `wenhaoyu97/divgen:5.0`
-
-**We summarize some common environment installation problems and solutions [here](logits/EnvIssues.pdf)**.
 
 ## Preprocess the data
 
@@ -48,32 +44,32 @@ python find_neighbours.py $DATA
 python filter_triple.py $DATA
 ```
 
-## Run Baseline
+## Run Model Example
 
-| Baseline Name | Run Baseline Model | Venue and Reference |
-| :--- | :--- | :--- |
-| Truncated Sampling | `bash scripts/TruncatedSampling.sh` | Fan et al., ACL 2018 [\[PDF\]](https://aclanthology.org/P18-1082.pdf) |
-| Nucleus Sampling | `bash scripts/NucleusSampling.sh` | Holtzman et al., ICLR 2020 [\[PDF\]](https://openreview.net/forum?id=rygGQyrFvH) |
-| Variational AutoEncoder | `bash scripts/VariationalAutoEncoder.sh` | Gupta et al., AAAI 2018 [\[PDF\]](https://ojs.aaai.org/index.php/AAAI/article/view/11956) |
-| Mixture of Experts <br /> (MoE-embed) | `bash scripts/MixtureOfExpertCho.sh` | Cho et al., EMNLP 2019 [\[PDF\]](https://aclanthology.org/D19-1308/) |
-| Mixture of Experts <br /> (MoE-prompt) | `bash scripts/MixtureOfExpertShen.sh` | Shen et al., ICML 2019 [\[PDF\]](http://proceedings.mlr.press/v97/shen19c.html) |
-
-## Run MoKGE
-
--- Independently parameterizing each expert may exacerbate overfitting since the number of parameters increases linearly with the number of experts. We follow the parameter sharing schema in Cho et al., (2019); Shen et al., (2019) to avoid this issue. This only requires a negligible increase in parameters over the baseline model that does not uses MoE. Speficially, Cho et al., (2019) added a unique expert embedding to each input token, while Shen et al., (2019) added an expert prefix token before the input text sequence.
-
--- MoKGE-embed (Cho et al.,) `bash scripts/KGMixtureOfExpertCho.sh`
-
--- MoKGE-prompt (shen et al.,) `bash scripts/KGMixtureOfExpertShen.sh`
+```python main.py --assign_ratio=0.8 --data_dir=data/anlg --eval_beams=3 --kg_loss_ratio=0.3 --learning_rate=3e-05 --max_source_length=40 --max_target_length=60 --metric_for_best_model=distinct_2 --mixtures=3 --model_name_or_path=facebook/bart-base --model_type=kgmoe --num_train_epochs=30 --opt_loss_ratio=0 --output_dir=output-anlg/KGMixtureOfExpertShen_Output --per_device_eval_batch_size=60 --per_device_train_batch_size=60 --pool_type=sag-h --seed=1053 --test_max_target_length=60 --val_max_target_length=60 --warmup_steps=0 --weight_decay=0.01 --fp16 --do_train --do_eval --do_predict --predict_with_generate --load_best_model_at_end --overwrite_output_dir --evaluate_during_training --use_wandb
+```
 
 ## Citation
 
 ```
-@inproceedings{yu2022diversifying,
-  title={Diversifying Content Generation for Commonsense Reasoning with Mixture of Knowledge Graph Experts},
-  author={Yu, Wenhao and Zhu, Chenguang and Qin, Lianhui and Zhang, Zhihan and Zhao, Tong and Jiang, Meng},
-  booktitle={Findings of Annual Meeting of the Association for Computational Linguistics (ACL)},
-  year={2022}
+@inproceedings{hwang-etal-2023-knowledge,
+    title = "Knowledge Graph Compression Enhances Diverse Commonsense Generation",
+    author = "Hwang, EunJeong  and
+      Thost, Veronika  and
+      Shwartz, Vered  and
+      Ma, Tengfei",
+    editor = "Bouamor, Houda  and
+      Pino, Juan  and
+      Bali, Kalika",
+    booktitle = "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing",
+    month = dec,
+    year = "2023",
+    address = "Singapore",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.emnlp-main.37",
+    doi = "10.18653/v1/2023.emnlp-main.37",
+    pages = "558--572",
+    abstract = "Generating commonsense explanations requires reasoning about commonsense knowledge beyond what is explicitly mentioned in the context. Existing models use commonsense knowledge graphs such as ConceptNet to extract a subgraph of relevant knowledge pertaining to concepts in the input. However, due to the large coverage and, consequently, vast scale of ConceptNet, the extracted subgraphs may contain loosely related, redundant and irrelevant information, which can introduce noise into the model. We propose to address this by applying a differentiable graph compression algorithm that focuses on the relevant knowledge for the task. The compressed subgraphs yield considerably more diverse outputs when incorporated into models for the tasks of generating commonsense and abductive explanations. Moreover, our model achieves better quality-diversity tradeoff than a large language model with 100 times the number of parameters. Our generic approach can be applied to additional NLP tasks that can benefit from incorporating external knowledge.",
 }
 ```
 
@@ -81,6 +77,6 @@ Please kindly cite our paper if you find this paper and the codes helpful.
 
 ## Acknowledgements
 
-Many thanks to the Github repository of [Transformers](https://github.com/huggingface/transformers), [KagNet](https://github.com/INK-USC/KagNet) and [MultiGen](https://github.com/cdjhz/multigen). 
+Many thanks to the Github repository of ACL 2022 paper "[Diversifying Content Generation for Commonsense Reasoning with Mixture of Knowledge Graph Experts](https://arxiv.org/abs/2203.07285)" ([implementation](https://github.com/DM2-ND/MoKGE))
 
-Part of our codes are modified based on their codes.
+Our codes are modified based on their codes.
